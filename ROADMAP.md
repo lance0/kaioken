@@ -57,62 +57,31 @@ Fast local load testing against HTTP endpoints with zero setup friction, real-ti
 - [x] Man page generation (`kaioken man`)
 - [x] HTML report export (`--format html`)
 
+### v0.6 — Checks & Thresholds ✓
+
+- [x] Thresholds in config (`[thresholds]` section)
+- [x] Exit code 4 when thresholds fail
+- [x] Threshold results in JSON output
+- [x] Status checks (`[[checks]]` with `status == 200`, `status in [...]`)
+
+### v0.7 — Load Profiles & Stages ✓
+
+- [x] Stages (`[[stages]]` with duration and target)
+- [x] Auto-calculated total duration from stages
+- [x] Gradual worker ramp up/down between stages
+
 ---
 
 ## Upcoming Milestones
 
-### v0.6 — Checks & Thresholds (CI/CD Ready) ✓
+### Deferred Items
 
-The killer feature for CI/CD pipelines - auto-fail tests based on criteria.
+Items moved from earlier milestones:
 
-- [x] **Thresholds in config** - Pass/fail criteria for metrics
-  ```toml
-  [thresholds]
-  p95_latency_ms = "< 500"
-  p99_latency_ms = "< 1000"
-  error_rate = "< 0.01"
-  rps = "> 100"
-  ```
-- [x] **Exit code 4** when thresholds fail (distinct from errors/regressions)
-- [x] **Threshold results in output** - Show pass/fail status in JSON
-- [x] **Status checks** - Validate response status codes
-  ```toml
-  [[checks]]
-  name = "status_ok"
-  condition = "status == 200"
-  
-  [[checks]]
-  name = "success_codes"
-  condition = "status in [200, 201, 204]"
-  ```
 - [ ] **Response body checks** - Validate response content (requires body capture)
 - [ ] **Check pass rate metric** - Track % of requests passing checks
 - [ ] **Abort on threshold breach** - `--fail-fast` to stop immediately
-
-### v0.7 — Load Profiles & Stages ✓
-
-Realistic load patterns for capacity planning.
-
-- [x] **Stages** - Define multi-phase load profiles
-  ```toml
-  [[stages]]
-  duration = "30s"
-  target = 50      # ramp to 50 workers
-  
-  [[stages]]
-  duration = "2m"
-  target = 50      # hold at 50
-  
-  [[stages]]
-  duration = "30s"
-  target = 0       # ramp down
-  ```
-- [ ] **Think time / pacing** - Simulate user pauses
-  ```toml
-  [load]
-  think_time = "500ms"           # fixed delay
-  think_time_range = "100ms-2s"  # random range
-  ```
+- [ ] **Think time / pacing** - Simulate user pauses between requests
 - [ ] **Constant arrival rate** - Fixed RPS regardless of response time
 - [ ] **Ramping arrival rate** - RPS-based stages (not worker-based)
 

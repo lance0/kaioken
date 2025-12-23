@@ -8,11 +8,13 @@ A Rust-based HTTP load testing tool with real-time terminal UI and DBZ flavor.
 ## Features
 
 - **Real-time TUI** - Live metrics with latency percentiles, RPS, status codes
+- **Thresholds** - CI/CD pass/fail criteria (p95 < 500ms, error_rate < 0.01)
+- **Stages** - Multi-phase load profiles (ramp up → hold → ramp down)
 - **Weighted scenarios** - Multi-endpoint testing with traffic distribution
 - **Rate limiting** - Token bucket algorithm for controlled load
 - **Ramp-up & warmup** - Gradual worker activation and connection priming
 - **Compare mode** - Regression detection with CI-friendly exit codes
-- **Multiple outputs** - JSON, CSV, and Markdown formats
+- **Multiple outputs** - JSON, CSV, Markdown, and HTML reports
 - **Variable interpolation** - Dynamic `${REQUEST_ID}` and `${TIMESTAMP_MS}`
 - **HTTP/2 support** - Optional h2 prior knowledge mode
 - **DBZ themes** - 6 color schemes (press `t` to cycle)
