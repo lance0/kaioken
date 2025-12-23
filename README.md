@@ -29,14 +29,14 @@ A Rust-based HTTP load testing tool with real-time terminal UI and DBZ flavor.
 | **HTTP/2** | ✅ | ✅ | ✅ | ❌ | ✅ |
 | **Weighted scenarios** | ✅ | ✅ | ❌ | ❌ | ✅ |
 | **Config file** | TOML | JS | JSON | Lua | Scala |
-| **Checks/thresholds** | 🔜 | ✅ | ❌ | ❌ | ✅ |
+| **Checks/thresholds** | ✅ | ✅ | ❌ | ❌ | ✅ |
 | **Stages** | 🔜 | ✅ | ❌ | ❌ | ✅ |
 | **Request chaining** | 🔜 | ✅ | ❌ | ❌ | ✅ |
 | **Language** | Rust | Go | Go | C | Scala |
 
-**kaioken strengths:** Real-time visibility, instant feedback, regression detection, memorable UX
+**kaioken strengths:** Real-time visibility, instant feedback, regression detection, CI/CD thresholds, memorable UX
 
-**Coming soon:** Checks & thresholds (v0.6), load stages (v0.7), request chaining (v0.8)
+**Coming soon:** Load stages (v0.7), request chaining (v0.8)
 
 ## Installation
 
