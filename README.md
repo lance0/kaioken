@@ -17,6 +17,27 @@ A Rust-based HTTP load testing tool with real-time terminal UI and DBZ flavor.
 - **HTTP/2 support** - Optional h2 prior knowledge mode
 - **DBZ themes** - 6 color schemes (press `t` to cycle)
 
+## vs Other Tools
+
+| Feature | kaioken | k6 | vegeta | wrk | Gatling |
+|---------|:-------:|:--:|:------:|:---:|:-------:|
+| **Real-time TUI** | ✅ | ❌ | ❌ | ❌ | ❌ |
+| **Zero config** | ✅ | ❌ | ✅ | ✅ | ❌ |
+| **Compare mode** | ✅ | ❌ | ❌ | ❌ | ❌ |
+| **HTML reports** | ✅ | ✅ | ❌ | ❌ | ✅ |
+| **Rate limiting** | ✅ | ✅ | ✅ | ❌ | ✅ |
+| **HTTP/2** | ✅ | ✅ | ✅ | ❌ | ✅ |
+| **Weighted scenarios** | ✅ | ✅ | ❌ | ❌ | ✅ |
+| **Config file** | TOML | JS | JSON | Lua | Scala |
+| **Checks/thresholds** | 🔜 | ✅ | ❌ | ❌ | ✅ |
+| **Stages** | 🔜 | ✅ | ❌ | ❌ | ✅ |
+| **Request chaining** | 🔜 | ✅ | ❌ | ❌ | ✅ |
+| **Language** | Rust | Go | Go | C | Scala |
+
+**kaioken strengths:** Real-time visibility, instant feedback, regression detection, memorable UX
+
+**Coming soon:** Checks & thresholds (v0.6), load stages (v0.7), request chaining (v0.8)
+
 ## Installation
 
 ```bash
