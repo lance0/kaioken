@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.1] - 2025-12-23
+
+### Added
+
+- `kaioken man` subcommand to generate man page (pipe to file or `man -l`)
+- HTML report export with `--format html` - standalone shareable reports with:
+  - Dark theme with gradient styling
+  - Throughput metrics with RPS visualization
+  - Latency percentile bars (p50-p999)
+  - Status codes and errors breakdown
+  - Timeline chart showing requests over time
+  - Configuration summary
+  - Mobile-responsive design
+
 ## [0.5.0] - 2025-12-23
 
 ### Added

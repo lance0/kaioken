@@ -54,7 +54,8 @@ Fast local load testing against HTTP endpoints with zero setup friction, real-ti
 - [x] `kaioken init` - generate starter config file
 - [x] Shell completions (bash, zsh, fish)
 - [x] `--dry-run` mode (validate config without running)
-- [ ] Man page generation
+- [x] Man page generation (`kaioken man`)
+- [x] HTML report export (`--format html`)
 - [ ] Improved error messages with suggestions
 - [ ] Statistical significance in compare (multi-run baselines)
 
@@ -69,7 +70,6 @@ Fast local load testing against HTTP endpoints with zero setup friction, real-ti
 - **Keep-alive metrics** — Connection reuse tracking
 - **DNS re-resolution** — For DNS-based load balancing testing
 - **Prometheus metrics endpoint** — Real-time scraping during runs
-- **HTML report export** — Shareable standalone reports
 
 ---
 

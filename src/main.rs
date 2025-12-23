@@ -12,7 +12,7 @@ use cli::{Cli, Commands, RunArgs};
 use compare::{compare_results, print_comparison};
 use config::{load_config, merge_config};
 use engine::Engine;
-use output::{print_csv, print_json, print_markdown, write_csv, write_json, write_markdown};
+use output::{print_csv, print_html, print_json, print_markdown, write_csv, write_html, write_json, write_markdown};
 use std::io::{self, Write};
 use tui::App;
 
@@ -45,6 +45,10 @@ async fn run() -> Result<i32, String> {
         Commands::Init(args) => run_init(&args),
         Commands::Completions(args) => {
             cli::generate_completions(args.shell);
+            Ok(0)
+        }
+        Commands::Man => {
+            cli::generate_man_page().map_err(|e| format!("Failed to generate man page: {}", e))?;
             Ok(0)
         }
     }
@@ -265,6 +269,8 @@ async fn run_load_test(args: &RunArgs) -> Result<i32, String> {
                 .map_err(|e| format!("Failed to write CSV: {}", e))?,
             "md" | "markdown" => print_markdown(&final_snapshot, &config)
                 .map_err(|e| format!("Failed to write Markdown: {}", e))?,
+            "html" => print_html(&final_snapshot, &config)
+                .map_err(|e| format!("Failed to write HTML: {}", e))?,
             "json" => print_json(&final_snapshot, &config)
                 .map_err(|e| format!("Failed to write JSON: {}", e))?,
             _ => print_summary(&final_snapshot, args.serious),
@@ -276,6 +282,7 @@ async fn run_load_test(args: &RunArgs) -> Result<i32, String> {
         let write_result = match format.as_str() {
             "csv" => write_csv(&final_snapshot, &config, path),
             "md" | "markdown" => write_markdown(&final_snapshot, &config, path),
+            "html" => write_html(&final_snapshot, &config, path),
             _ => write_json(&final_snapshot, &config, path),
         };
         write_result.map_err(|e| format!("Failed to write output file: {}", e))?;

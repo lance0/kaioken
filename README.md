@@ -79,7 +79,7 @@ kaioken run [OPTIONS] [URL]
 | `--http2` | false | Use HTTP/2 prior knowledge |
 | `-f, --config` | — | TOML config file |
 | `-o, --output` | — | Output file path |
-| `--format` | json | Output format: json, csv, md |
+| `--format` | json | Output format: json, csv, md, html |
 | `--no-tui` | false | Headless mode |
 | `--json` | false | Shorthand for `--no-tui --format json` |
 | `--dry-run` | false | Validate config and exit |
@@ -124,6 +124,15 @@ kaioken completions <SHELL>
 ```
 
 Generate shell completions. Supported: `bash`, `zsh`, `fish`, `powershell`, `elvish`.
+
+### `kaioken man`
+
+```
+kaioken man > kaioken.1
+man -l kaioken.1
+```
+
+Generate man page in roff format.
 
 ## Config File
 

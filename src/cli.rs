@@ -35,6 +35,9 @@ pub enum Commands {
 
     /// Generate shell completions
     Completions(CompletionsArgs),
+
+    /// Generate man page
+    Man,
 }
 
 impl Default for Commands {
@@ -215,4 +218,10 @@ pub struct CompletionsArgs {
 pub fn generate_completions(shell: Shell) {
     let mut cmd = Cli::command();
     clap_complete::generate(shell, &mut cmd, "kaioken", &mut std::io::stdout());
+}
+
+pub fn generate_man_page() -> Result<(), std::io::Error> {
+    let cmd = Cli::command();
+    let man = clap_mangen::Man::new(cmd);
+    man.render(&mut std::io::stdout())
 }
