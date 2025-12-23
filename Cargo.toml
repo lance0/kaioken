@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 description = "A Rust-based HTTP load testing tool with real-time terminal UI and DBZ flavor"
 license = "MIT"
-repository = "https://github.com/yourusername/kaioken"
+repository = "https://github.com/lance0/kaioken"
 keywords = ["load-testing", "http", "benchmark", "tui"]
 categories = ["command-line-utilities", "development-tools::profiling"]
 
