@@ -2,6 +2,139 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::time::Duration;
 
+// ============================================================================
+// Checks & Thresholds (v0.6)
+// ============================================================================
+
+#[derive(Debug, Clone)]
+pub struct Check {
+    pub name: String,
+    pub condition: CheckCondition,
+}
+
+#[derive(Debug, Clone)]
+pub enum CheckCondition {
+    StatusEquals(u16),
+    StatusIn(Vec<u16>),
+    StatusLt(u16),
+    StatusGt(u16),
+    BodyContains(String),
+    BodyNotContains(String),
+    BodyMatches(regex_lite::Regex),
+}
+
+impl CheckCondition {
+    pub fn evaluate(&self, status: Option<u16>, body: &str) -> bool {
+        match self {
+            CheckCondition::StatusEquals(expected) => status == Some(*expected),
+            CheckCondition::StatusIn(codes) => status.map(|s| codes.contains(&s)).unwrap_or(false),
+            CheckCondition::StatusLt(threshold) => status.map(|s| s < *threshold).unwrap_or(false),
+            CheckCondition::StatusGt(threshold) => status.map(|s| s > *threshold).unwrap_or(false),
+            CheckCondition::BodyContains(needle) => body.contains(needle),
+            CheckCondition::BodyNotContains(needle) => !body.contains(needle),
+            CheckCondition::BodyMatches(re) => re.is_match(body),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Threshold {
+    pub metric: ThresholdMetric,
+    pub operator: ThresholdOp,
+    pub value: f64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ThresholdMetric {
+    P50LatencyMs,
+    P75LatencyMs,
+    P90LatencyMs,
+    P95LatencyMs,
+    P99LatencyMs,
+    P999LatencyMs,
+    MeanLatencyMs,
+    MaxLatencyMs,
+    ErrorRate,
+    Rps,
+}
+
+impl ThresholdMetric {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            ThresholdMetric::P50LatencyMs => "p50_latency_ms",
+            ThresholdMetric::P75LatencyMs => "p75_latency_ms",
+            ThresholdMetric::P90LatencyMs => "p90_latency_ms",
+            ThresholdMetric::P95LatencyMs => "p95_latency_ms",
+            ThresholdMetric::P99LatencyMs => "p99_latency_ms",
+            ThresholdMetric::P999LatencyMs => "p999_latency_ms",
+            ThresholdMetric::MeanLatencyMs => "mean_latency_ms",
+            ThresholdMetric::MaxLatencyMs => "max_latency_ms",
+            ThresholdMetric::ErrorRate => "error_rate",
+            ThresholdMetric::Rps => "rps",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ThresholdOp {
+    Lt,
+    Lte,
+    Gt,
+    Gte,
+    Eq,
+}
+
+impl ThresholdOp {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            ThresholdOp::Lt => "<",
+            ThresholdOp::Lte => "<=",
+            ThresholdOp::Gt => ">",
+            ThresholdOp::Gte => ">=",
+            ThresholdOp::Eq => "==",
+        }
+    }
+
+    pub fn evaluate(&self, actual: f64, expected: f64) -> bool {
+        match self {
+            ThresholdOp::Lt => actual < expected,
+            ThresholdOp::Lte => actual <= expected,
+            ThresholdOp::Gt => actual > expected,
+            ThresholdOp::Gte => actual >= expected,
+            ThresholdOp::Eq => (actual - expected).abs() < f64::EPSILON,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ThresholdResult {
+    pub metric: String,
+    pub condition: String,
+    pub actual: f64,
+    pub passed: bool,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct CheckStats {
+    pub total: u64,
+    pub passed: u64,
+    pub failed: u64,
+}
+
+impl CheckStats {
+    pub fn pass_rate(&self) -> f64 {
+        if self.total > 0 {
+            self.passed as f64 / self.total as f64
+        } else {
+            1.0
+        }
+    }
+}
+
+// ============================================================================
+// Error Types
+// ============================================================================
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ErrorKind {
@@ -119,6 +252,8 @@ pub struct StatsSnapshot {
     pub errors: HashMap<ErrorKind, u64>,
 
     pub timeline: Vec<TimelineBucket>,
+
+    pub check_stats: HashMap<String, CheckStats>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -155,6 +290,8 @@ pub struct LoadConfig {
     pub connect_timeout: Duration,
     pub insecure: bool,
     pub http2: bool,
+    pub thresholds: Vec<Threshold>,
+    pub checks: Vec<Check>,
 }
 
 impl Default for LoadConfig {
@@ -175,6 +312,8 @@ impl Default for LoadConfig {
             connect_timeout: Duration::from_secs(2),
             insecure: false,
             http2: false,
+            thresholds: Vec::new(),
+            checks: Vec::new(),
         }
     }
 }

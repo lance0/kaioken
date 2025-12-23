@@ -1,5 +1,5 @@
 use crate::cli::RunArgs;
-use crate::types::{LoadConfig, Scenario};
+use crate::types::{Check, CheckCondition, LoadConfig, Scenario, Threshold, ThresholdMetric, ThresholdOp};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::fs;
@@ -14,6 +14,30 @@ pub struct TomlConfig {
     pub load: LoadSettings,
     #[serde(default)]
     pub scenarios: Vec<ScenarioConfig>,
+    #[serde(default)]
+    pub thresholds: ThresholdsConfig,
+    #[serde(default)]
+    pub checks: Vec<CheckConfig>,
+}
+
+#[derive(Debug, Deserialize, Default)]
+pub struct ThresholdsConfig {
+    pub p50_latency_ms: Option<String>,
+    pub p75_latency_ms: Option<String>,
+    pub p90_latency_ms: Option<String>,
+    pub p95_latency_ms: Option<String>,
+    pub p99_latency_ms: Option<String>,
+    pub p999_latency_ms: Option<String>,
+    pub mean_latency_ms: Option<String>,
+    pub max_latency_ms: Option<String>,
+    pub error_rate: Option<String>,
+    pub rps: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct CheckConfig {
+    pub name: String,
+    pub condition: String,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -201,6 +225,12 @@ pub fn merge_config(args: &RunArgs, toml: Option<TomlConfig>) -> Result<LoadConf
     // Process scenarios
     let scenarios = process_scenarios(&toml.scenarios)?;
 
+    // Process thresholds
+    let thresholds = parse_thresholds(&toml.thresholds)?;
+
+    // Process checks
+    let checks = parse_checks(&toml.checks)?;
+
     Ok(LoadConfig {
         url,
         method,
@@ -217,6 +247,8 @@ pub fn merge_config(args: &RunArgs, toml: Option<TomlConfig>) -> Result<LoadConf
         connect_timeout,
         insecure,
         http2,
+        thresholds,
+        checks,
     })
 }
 
@@ -262,4 +294,150 @@ fn process_scenarios(configs: &[ScenarioConfig]) -> Result<Vec<Scenario>, String
     }
 
     Ok(scenarios)
+}
+
+fn parse_thresholds(config: &ThresholdsConfig) -> Result<Vec<Threshold>, String> {
+    let mut thresholds = Vec::new();
+
+    let entries: Vec<(ThresholdMetric, &Option<String>)> = vec![
+        (ThresholdMetric::P50LatencyMs, &config.p50_latency_ms),
+        (ThresholdMetric::P75LatencyMs, &config.p75_latency_ms),
+        (ThresholdMetric::P90LatencyMs, &config.p90_latency_ms),
+        (ThresholdMetric::P95LatencyMs, &config.p95_latency_ms),
+        (ThresholdMetric::P99LatencyMs, &config.p99_latency_ms),
+        (ThresholdMetric::P999LatencyMs, &config.p999_latency_ms),
+        (ThresholdMetric::MeanLatencyMs, &config.mean_latency_ms),
+        (ThresholdMetric::MaxLatencyMs, &config.max_latency_ms),
+        (ThresholdMetric::ErrorRate, &config.error_rate),
+        (ThresholdMetric::Rps, &config.rps),
+    ];
+
+    for (metric, value) in entries {
+        if let Some(expr) = value {
+            let threshold = parse_threshold_expr(metric, expr)?;
+            thresholds.push(threshold);
+        }
+    }
+
+    Ok(thresholds)
+}
+
+fn parse_threshold_expr(metric: ThresholdMetric, expr: &str) -> Result<Threshold, String> {
+    let expr = expr.trim();
+
+    // Parse operator and value: "< 500", "<= 500", "> 100", ">= 100", "== 500"
+    let (operator, value_str) = if expr.starts_with("<=") {
+        (ThresholdOp::Lte, expr[2..].trim())
+    } else if expr.starts_with(">=") {
+        (ThresholdOp::Gte, expr[2..].trim())
+    } else if expr.starts_with("==") {
+        (ThresholdOp::Eq, expr[2..].trim())
+    } else if expr.starts_with('<') {
+        (ThresholdOp::Lt, expr[1..].trim())
+    } else if expr.starts_with('>') {
+        (ThresholdOp::Gt, expr[1..].trim())
+    } else {
+        return Err(format!(
+            "Invalid threshold expression for '{}': '{}'. Expected format: '< 500' or '>= 100'",
+            metric.as_str(),
+            expr
+        ));
+    };
+
+    let value: f64 = value_str.parse().map_err(|_| {
+        format!(
+            "Invalid threshold value for '{}': '{}'. Expected a number.",
+            metric.as_str(),
+            value_str
+        )
+    })?;
+
+    Ok(Threshold {
+        metric,
+        operator,
+        value,
+    })
+}
+
+fn parse_checks(configs: &[CheckConfig]) -> Result<Vec<Check>, String> {
+    let mut checks = Vec::with_capacity(configs.len());
+
+    for cfg in configs {
+        let condition = parse_check_condition(&cfg.condition).map_err(|e| {
+            format!("Invalid check condition for '{}': {}", cfg.name, e)
+        })?;
+
+        checks.push(Check {
+            name: cfg.name.clone(),
+            condition,
+        });
+    }
+
+    Ok(checks)
+}
+
+fn parse_check_condition(expr: &str) -> Result<CheckCondition, String> {
+    let expr = expr.trim();
+
+    // status == 200
+    if let Some(rest) = expr.strip_prefix("status") {
+        let rest = rest.trim();
+        if let Some(value) = rest.strip_prefix("==") {
+            let status: u16 = value.trim().parse().map_err(|_| "Invalid status code")?;
+            return Ok(CheckCondition::StatusEquals(status));
+        }
+        if let Some(value) = rest.strip_prefix("<") {
+            let status: u16 = value.trim().parse().map_err(|_| "Invalid status code")?;
+            return Ok(CheckCondition::StatusLt(status));
+        }
+        if let Some(value) = rest.strip_prefix(">") {
+            let status: u16 = value.trim().parse().map_err(|_| "Invalid status code")?;
+            return Ok(CheckCondition::StatusGt(status));
+        }
+        if let Some(rest) = rest.strip_prefix("in") {
+            // status in [200, 201, 204]
+            let rest = rest.trim();
+            if rest.starts_with('[') && rest.ends_with(']') {
+                let inner = &rest[1..rest.len() - 1];
+                let codes: Result<Vec<u16>, _> = inner
+                    .split(',')
+                    .map(|s| s.trim().parse::<u16>())
+                    .collect();
+                let codes = codes.map_err(|_| "Invalid status codes in list")?;
+                return Ok(CheckCondition::StatusIn(codes));
+            }
+        }
+        return Err(format!("Unknown status condition: '{}'", expr));
+    }
+
+    // body contains "..."
+    if let Some(rest) = expr.strip_prefix("body") {
+        let rest = rest.trim();
+        if let Some(rest) = rest.strip_prefix("contains") {
+            let needle = parse_quoted_string(rest.trim())?;
+            return Ok(CheckCondition::BodyContains(needle));
+        }
+        if let Some(rest) = rest.strip_prefix("not contains") {
+            let needle = parse_quoted_string(rest.trim())?;
+            return Ok(CheckCondition::BodyNotContains(needle));
+        }
+        if let Some(rest) = rest.strip_prefix("matches") {
+            let pattern = parse_quoted_string(rest.trim())?;
+            let re = regex_lite::Regex::new(&pattern)
+                .map_err(|e| format!("Invalid regex: {}", e))?;
+            return Ok(CheckCondition::BodyMatches(re));
+        }
+        return Err(format!("Unknown body condition: '{}'", expr));
+    }
+
+    Err(format!("Unknown condition: '{}'. Expected 'status ...' or 'body ...'", expr))
+}
+
+fn parse_quoted_string(s: &str) -> Result<String, String> {
+    let s = s.trim();
+    if (s.starts_with('"') && s.ends_with('"')) || (s.starts_with('\'') && s.ends_with('\'')) {
+        Ok(s[1..s.len() - 1].to_string())
+    } else {
+        Err(format!("Expected quoted string, got: '{}'", s))
+    }
 }

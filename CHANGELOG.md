@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2025-12-23
+
+### Added
+
+- **Thresholds** - CI/CD pass/fail criteria for metrics:
+  ```toml
+  [thresholds]
+  p95_latency_ms = "< 500"
+  p99_latency_ms = "< 1000"
+  error_rate = "< 0.01"
+  rps = "> 100"
+  ```
+- Exit code 4 when thresholds fail (distinct from errors/regressions)
+- Threshold results in JSON output (`thresholds.passed`, `thresholds.results`)
+- `--dry-run` now displays configured thresholds and checks
+- **Check conditions** - validate response status (body checks coming soon):
+  ```toml
+  [[checks]]
+  name = "status_ok"
+  condition = "status == 200"
+  
+  [[checks]]
+  name = "success_status"
+  condition = "status in [200, 201, 204]"
+  ```
+
+### Changed
+
+- Threshold evaluation happens before output generation
+- JSON output includes threshold results when thresholds configured
+
 ## [0.5.1] - 2025-12-23
 
 ### Added

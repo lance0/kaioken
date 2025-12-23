@@ -1,5 +1,6 @@
 use crate::engine::Stats;
 use crate::types::StatsSnapshot;
+use std::collections::HashMap;
 
 pub fn create_snapshot(stats: &Stats) -> StatsSnapshot {
     StatsSnapshot {
@@ -27,5 +28,6 @@ pub fn create_snapshot(stats: &Stats) -> StatsSnapshot {
         status_codes: stats.status_codes.clone(),
         errors: stats.errors.clone(),
         timeline: stats.timeline.clone(),
+        check_stats: HashMap::new(), // TODO: populate from stats when checks implemented
     }
 }

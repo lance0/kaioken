@@ -1,4 +1,4 @@
-use crate::types::{LoadConfig, StatsSnapshot};
+use crate::types::{LoadConfig, StatsSnapshot, ThresholdResult};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -13,6 +13,14 @@ pub struct JsonOutput {
     pub status_codes: HashMap<String, u64>,
     pub errors: HashMap<String, u64>,
     pub timeline: Vec<TimelineEntry>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub thresholds: Option<ThresholdsOutput>,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct ThresholdsOutput {
+    pub passed: bool,
+    pub results: Vec<ThresholdResult>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -99,7 +107,11 @@ fn redact_header(header: &str) -> String {
     header.to_string()
 }
 
-pub fn create_output(snapshot: &StatsSnapshot, config: &LoadConfig) -> JsonOutput {
+pub fn create_output(
+    snapshot: &StatsSnapshot,
+    config: &LoadConfig,
+    threshold_results: Option<&[ThresholdResult]>,
+) -> JsonOutput {
     let now = Utc::now();
     let started_at = now - chrono::Duration::from_std(snapshot.elapsed).unwrap_or_default();
 
@@ -181,19 +193,32 @@ pub fn create_output(snapshot: &StatsSnapshot, config: &LoadConfig) -> JsonOutpu
         status_codes,
         errors,
         timeline,
+        thresholds: threshold_results.map(|results| ThresholdsOutput {
+            passed: results.iter().all(|r| r.passed),
+            results: results.to_vec(),
+        }),
     }
 }
 
-pub fn write_json(snapshot: &StatsSnapshot, config: &LoadConfig, path: &str) -> io::Result<()> {
-    let output = create_output(snapshot, config);
+pub fn write_json(
+    snapshot: &StatsSnapshot,
+    config: &LoadConfig,
+    path: &str,
+    threshold_results: Option<&[ThresholdResult]>,
+) -> io::Result<()> {
+    let output = create_output(snapshot, config, threshold_results);
     let file = File::create(path)?;
     let writer = BufWriter::new(file);
     serde_json::to_writer_pretty(writer, &output)?;
     Ok(())
 }
 
-pub fn print_json(snapshot: &StatsSnapshot, config: &LoadConfig) -> io::Result<()> {
-    let output = create_output(snapshot, config);
+pub fn print_json(
+    snapshot: &StatsSnapshot,
+    config: &LoadConfig,
+    threshold_results: Option<&[ThresholdResult]>,
+) -> io::Result<()> {
+    let output = create_output(snapshot, config, threshold_results);
     let stdout = io::stdout();
     let writer = BufWriter::new(stdout.lock());
     serde_json::to_writer_pretty(writer, &output)?;

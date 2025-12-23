@@ -184,6 +184,32 @@ duration = "30s"
 
 Environment variables: `${VAR}` or `${VAR:-default}`
 
+## Thresholds
+
+Define pass/fail criteria for CI/CD pipelines:
+
+```toml
+[thresholds]
+p95_latency_ms = "< 500"
+p99_latency_ms = "< 1000"
+error_rate = "< 0.01"
+rps = "> 100"
+```
+
+Available metrics:
+- `p50_latency_ms`, `p75_latency_ms`, `p90_latency_ms`, `p95_latency_ms`, `p99_latency_ms`, `p999_latency_ms`
+- `mean_latency_ms`, `max_latency_ms`
+- `error_rate` (0.0 - 1.0)
+- `rps` (requests per second)
+
+Operators: `<`, `<=`, `>`, `>=`, `==`
+
+Exit codes:
+- `0` - Success
+- `1` - Error (high error rate)
+- `3` - Regressions detected (compare mode)
+- `4` - Thresholds failed
+
 ## Weighted Scenarios
 
 Test multiple endpoints with different traffic ratios:
@@ -245,22 +271,30 @@ kaioken run 'https://api.example.com/items/${REQUEST_ID}' \
 ## CI Integration
 
 ```yaml
-# GitHub Actions example
-- name: Load test
+# GitHub Actions example with thresholds
+- name: Load test with thresholds
   run: |
-    kaioken run https://api.example.com \
-      -c 50 -d 30s --no-tui --json -o results.json
+    cat > test.toml << EOF
+    [target]
+    url = "https://api.example.com/health"
+    
+    [load]
+    concurrency = 50
+    duration = "30s"
+    
+    [thresholds]
+    p95_latency_ms = "< 500"
+    error_rate = "< 0.01"
+    EOF
+    
+    kaioken run -f test.toml --no-tui -o results.json -y
+    # Exits with code 4 if thresholds fail
 
-- name: Check for regressions
+- name: Check for regressions (optional)
   run: |
     kaioken compare baseline.json results.json \
       --threshold-p99 15 --threshold-rps 10
 ```
-
-Exit codes:
-- `0` - Success
-- `1` - Error (high error rate)
-- `3` - Regressions detected (compare mode)
 
 ## Power Levels
 

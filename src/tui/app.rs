@@ -114,7 +114,7 @@ impl App {
                             }
                             KeyCode::Char('s') => {
                                 if let Some(path) = &self.output_path {
-                                    let _ = write_json(&snapshot, &self.config, path);
+                                    let _ = write_json(&snapshot, &self.config, path, None);
                                 }
                             }
                             KeyCode::Char('t') => {

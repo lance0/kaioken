@@ -11,7 +11,7 @@ use clap::Parser;
 use cli::{Cli, Commands, RunArgs};
 use compare::{compare_results, print_comparison};
 use config::{load_config, merge_config};
-use engine::Engine;
+use engine::{evaluate_thresholds, print_threshold_results, Engine};
 use output::{print_csv, print_html, print_json, print_markdown, write_csv, write_html, write_json, write_markdown};
 use std::io::{self, Write};
 use tui::App;
@@ -200,6 +200,23 @@ async fn run_load_test(args: &RunArgs) -> Result<i32, String> {
         if config.body.is_some() {
             eprintln!("Body:        present");
         }
+        if !config.thresholds.is_empty() {
+            eprintln!("Thresholds:  {} defined", config.thresholds.len());
+            for t in &config.thresholds {
+                eprintln!(
+                    "  - {} {} {}",
+                    t.metric.as_str(),
+                    t.operator.as_str(),
+                    t.value
+                );
+            }
+        }
+        if !config.checks.is_empty() {
+            eprintln!("Checks:      {} defined", config.checks.len());
+            for c in &config.checks {
+                eprintln!("  - {}", c.name);
+            }
+        }
         return Ok(0);
     }
 
@@ -260,9 +277,19 @@ async fn run_load_test(args: &RunArgs) -> Result<i32, String> {
 
     let final_snapshot = snapshot_rx.borrow().clone();
 
+    // Evaluate thresholds
+    let threshold_results = evaluate_thresholds(&config.thresholds, &final_snapshot);
+    let thresholds_passed = threshold_results.iter().all(|r| r.passed);
+    let threshold_results_opt = if threshold_results.is_empty() {
+        None
+    } else {
+        Some(threshold_results.as_slice())
+    };
+
     // Print output to stdout if in headless mode
     if output_json {
-        print_json(&final_snapshot, &config).map_err(|e| format!("Failed to write JSON: {}", e))?;
+        print_json(&final_snapshot, &config, threshold_results_opt)
+            .map_err(|e| format!("Failed to write JSON: {}", e))?;
     } else if !use_tui {
         match format.as_str() {
             "csv" => print_csv(&final_snapshot, &config)
@@ -271,7 +298,7 @@ async fn run_load_test(args: &RunArgs) -> Result<i32, String> {
                 .map_err(|e| format!("Failed to write Markdown: {}", e))?,
             "html" => print_html(&final_snapshot, &config)
                 .map_err(|e| format!("Failed to write HTML: {}", e))?,
-            "json" => print_json(&final_snapshot, &config)
+            "json" => print_json(&final_snapshot, &config, threshold_results_opt)
                 .map_err(|e| format!("Failed to write JSON: {}", e))?,
             _ => print_summary(&final_snapshot, args.serious),
         }
@@ -283,7 +310,7 @@ async fn run_load_test(args: &RunArgs) -> Result<i32, String> {
             "csv" => write_csv(&final_snapshot, &config, path),
             "md" | "markdown" => write_markdown(&final_snapshot, &config, path),
             "html" => write_html(&final_snapshot, &config, path),
-            _ => write_json(&final_snapshot, &config, path),
+            _ => write_json(&final_snapshot, &config, path, threshold_results_opt),
         };
         write_result.map_err(|e| format!("Failed to write output file: {}", e))?;
 
@@ -292,10 +319,18 @@ async fn run_load_test(args: &RunArgs) -> Result<i32, String> {
         }
     }
 
-    if stats.failed > 0 && stats.error_rate() > 0.5 {
-        Ok(1)
+    // Print threshold results to console (for non-JSON formats)
+    if !threshold_results.is_empty() && !use_tui && !output_json && format != "json" {
+        print_threshold_results(&threshold_results);
+    }
+
+    // Determine exit code
+    if !thresholds_passed {
+        Ok(4) // Thresholds failed
+    } else if stats.failed > 0 && stats.error_rate() > 0.5 {
+        Ok(1) // High error rate
     } else {
-        Ok(0)
+        Ok(0) // Success
     }
 }
 

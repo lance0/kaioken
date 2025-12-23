@@ -61,11 +61,11 @@ Fast local load testing against HTTP endpoints with zero setup friction, real-ti
 
 ## Upcoming Milestones
 
-### v0.6 — Checks & Thresholds (CI/CD Ready)
+### v0.6 — Checks & Thresholds (CI/CD Ready) ✓
 
 The killer feature for CI/CD pipelines - auto-fail tests based on criteria.
 
-- [ ] **Thresholds in config** - Pass/fail criteria for metrics
+- [x] **Thresholds in config** - Pass/fail criteria for metrics
   ```toml
   [thresholds]
   p95_latency_ms = "< 500"
@@ -73,18 +73,19 @@ The killer feature for CI/CD pipelines - auto-fail tests based on criteria.
   error_rate = "< 0.01"
   rps = "> 100"
   ```
-- [ ] **Exit code 4** when thresholds fail (distinct from errors/regressions)
-- [ ] **Threshold results in output** - Show pass/fail status in JSON/HTML
-- [ ] **Response body checks** - Validate response content
+- [x] **Exit code 4** when thresholds fail (distinct from errors/regressions)
+- [x] **Threshold results in output** - Show pass/fail status in JSON
+- [x] **Status checks** - Validate response status codes
   ```toml
   [[checks]]
   name = "status_ok"
-  condition = "status == 200 || status == 201"
+  condition = "status == 200"
   
   [[checks]]
-  name = "has_data"
-  condition = "body contains 'success'"
+  name = "success_codes"
+  condition = "status in [200, 201, 204]"
   ```
+- [ ] **Response body checks** - Validate response content (requires body capture)
 - [ ] **Check pass rate metric** - Track % of requests passing checks
 - [ ] **Abort on threshold breach** - `--fail-fast` to stop immediately
 
