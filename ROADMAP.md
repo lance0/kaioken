@@ -70,15 +70,15 @@ Fast local load testing against HTTP endpoints with zero setup friction, real-ti
 - [x] Auto-calculated total duration from stages
 - [x] Gradual worker ramp up/down between stages
 
----
-
-## Upcoming Milestones
-
 ### v0.8 — Request Chaining & Checks ✓
 
 - [x] Response body checks (`body contains`, `body matches`)
 - [x] Response data extraction (`json:`, `regex:`, `body`)
 - [x] Variable interpolation with extracted values (`${varname}`)
+
+---
+
+## Upcoming Milestones
 
 ### Deferred Items
 
