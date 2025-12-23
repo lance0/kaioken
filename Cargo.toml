@@ -1,9 +1,9 @@
 [package]
 name = "kaioken"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2024"
 description = "A Rust-based HTTP load testing tool with real-time terminal UI and DBZ flavor"
-license = "MIT"
+license = "MIT OR Apache-2.0"
 repository = "https://github.com/lance0/kaioken"
 keywords = ["load-testing", "http", "benchmark", "tui"]
 categories = ["command-line-utilities", "development-tools::profiling"]
