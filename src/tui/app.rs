@@ -1,4 +1,5 @@
 use crate::output::write_json;
+use crate::tui::theme::ThemeMode;
 use crate::tui::{ui, Flavor, Theme};
 use crate::types::{LoadConfig, RunPhase, RunState, StatsSnapshot};
 use crossterm::{
@@ -19,6 +20,7 @@ pub struct App {
     phase_rx: watch::Receiver<RunPhase>,
     cancel_token: CancellationToken,
     theme: Theme,
+    theme_mode: ThemeMode,
     flavor: Flavor,
     output_path: Option<String>,
 }
@@ -41,6 +43,7 @@ impl App {
             phase_rx,
             cancel_token,
             theme: Theme::default(),
+            theme_mode: ThemeMode::default(),
             flavor: Flavor::new(serious),
             output_path,
         }
@@ -85,6 +88,7 @@ impl App {
                     self.config.duration,
                     self.config.warmup,
                     &self.theme,
+                    self.theme_mode,
                     &self.flavor,
                 );
             })?;
@@ -112,6 +116,10 @@ impl App {
                                 if let Some(path) = &self.output_path {
                                     let _ = write_json(&snapshot, &self.config, path);
                                 }
+                            }
+                            KeyCode::Char('t') => {
+                                self.theme_mode = self.theme_mode.cycle();
+                                self.theme = Theme::from_mode(self.theme_mode);
                             }
                             _ => {}
                         }

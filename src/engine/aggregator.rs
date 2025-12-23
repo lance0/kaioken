@@ -2,6 +2,7 @@ use crate::engine::{create_snapshot, Stats};
 use crate::types::{RequestResult, RunPhase, StatsSnapshot};
 use std::time::{Duration, Instant};
 use tokio::sync::{mpsc, watch};
+use tokio_util::sync::CancellationToken;
 
 pub struct Aggregator {
     stats: Stats,
@@ -11,6 +12,8 @@ pub struct Aggregator {
     phase_tx: watch::Sender<RunPhase>,
     start_time: Instant,
     warmup_complete: bool,
+    max_requests: u64,
+    cancel_token: CancellationToken,
 }
 
 impl Aggregator {
@@ -20,6 +23,8 @@ impl Aggregator {
         snapshot_tx: watch::Sender<StatsSnapshot>,
         warmup_duration: Duration,
         phase_tx: watch::Sender<RunPhase>,
+        max_requests: u64,
+        cancel_token: CancellationToken,
     ) -> Self {
         let in_warmup = !warmup_duration.is_zero();
         if !in_warmup {
@@ -34,6 +39,8 @@ impl Aggregator {
             phase_tx,
             start_time: Instant::now(),
             warmup_complete: !in_warmup,
+            max_requests,
+            cancel_token,
         }
     }
 
@@ -51,6 +58,17 @@ impl Aggregator {
                             self.check_warmup_complete();
                             if self.warmup_complete {
                                 self.stats.record(&req_result);
+
+                                // Check max_requests limit
+                                if self.max_requests > 0
+                                    && self.stats.total_requests() >= self.max_requests
+                                {
+                                    tracing::info!(
+                                        "Max requests ({}) reached, stopping",
+                                        self.max_requests
+                                    );
+                                    self.cancel_token.cancel();
+                                }
                             }
                         }
                         None => {

@@ -136,12 +136,14 @@ pub struct LoadConfig {
     pub body: Option<String>,
     pub concurrency: u32,
     pub duration: Duration,
+    pub max_requests: u64,
     pub rate: u32,
     pub ramp_up: Duration,
     pub warmup: Duration,
     pub timeout: Duration,
     pub connect_timeout: Duration,
     pub insecure: bool,
+    pub http2: bool,
 }
 
 impl Default for LoadConfig {
@@ -153,12 +155,14 @@ impl Default for LoadConfig {
             body: None,
             concurrency: 50,
             duration: Duration::from_secs(10),
+            max_requests: 0,
             rate: 0,
             ramp_up: Duration::ZERO,
             warmup: Duration::ZERO,
             timeout: Duration::from_secs(5),
             connect_timeout: Duration::from_secs(2),
             insecure: false,
+            http2: false,
         }
     }
 }

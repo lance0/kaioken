@@ -82,6 +82,18 @@ pub struct RunArgs {
     #[arg(short = 'b', long)]
     pub body: Option<String>,
 
+    /// Request body from file
+    #[arg(long, value_name = "FILE")]
+    pub body_file: Option<PathBuf>,
+
+    /// Max requests to send (0 = unlimited, use duration)
+    #[arg(short = 'n', long, default_value = "0")]
+    pub max_requests: u64,
+
+    /// Use HTTP/2 (default: HTTP/1.1)
+    #[arg(long)]
+    pub http2: bool,
+
     /// Config file path (TOML)
     #[arg(short = 'f', long = "config")]
     pub config: Option<PathBuf>,

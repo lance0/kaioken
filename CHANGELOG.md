@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2025-12-23
+
+### Added
+
+- `--max-requests` / `-n` flag to stop after N requests (useful for fixed workloads)
+- `--body-file` flag to load request body from file
+- `--http2` flag for HTTP/2 prior knowledge (h2c)
+- Variable interpolation in URL, headers, and body:
+  - `${REQUEST_ID}` - unique ID per request (worker_id * 1B + counter)
+  - `${TIMESTAMP_MS}` - current epoch time in milliseconds
+- DBZ-themed color schemes in TUI (press `t` to cycle):
+  - Earth (default cyan/yellow)
+  - Namek (green/turquoise)
+  - Planet Vegeta (red/orange)
+  - Time Chamber (steel blue/minimal)
+  - Tournament (gold/purple)
+  - Frieza Force (purple/pink)
+
+### Changed
+
+- Footer now shows current theme name and `[t]heme` hint
+
 ## [0.3.0] - 2025-12-23
 
 ### Added

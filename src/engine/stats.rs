@@ -111,6 +111,10 @@ impl Stats {
         self.start_time.elapsed()
     }
 
+    pub fn total_requests(&self) -> u64 {
+        self.total_requests
+    }
+
     pub fn rolling_rps(&self) -> f64 {
         self.rolling_window.iter().map(|(_, c)| *c as f64).sum()
     }

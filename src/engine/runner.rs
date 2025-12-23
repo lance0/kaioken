@@ -59,6 +59,7 @@ impl Engine {
             self.config.timeout,
             self.config.connect_timeout,
             self.config.insecure,
+            self.config.http2,
         )
         .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
 
@@ -91,6 +92,8 @@ impl Engine {
             self.snapshot_tx.clone(),
             self.config.warmup,
             self.phase_tx.clone(),
+            self.config.max_requests,
+            self.cancel_token.clone(),
         );
         let aggregator_handle = tokio::spawn(aggregator.run());
 

@@ -40,18 +40,17 @@ Fast local load testing against HTTP endpoints with zero setup friction, real-ti
 - [x] Exit code 3 on regression (for CI gating)
 - [x] Config compatibility warnings
 
-### v0.4 — Advanced Features
+### v0.4 — Advanced Features ✓
 
-- [ ] Weighted scenarios (`[[scenarios]]` in TOML)
-- [ ] `--max-requests` cap (stop after N requests)
-- [ ] Body from file (`--body-file`)
-- [ ] HTTP/2 support toggle
-- [ ] Request body size limit (`--max-body-bytes`)
-- [ ] Variable interpolation (`${REQUEST_ID}`, `${TIMESTAMP_MS}`)
-- [ ] Light/dark theme toggle in TUI (`t` key)
+- [x] `--max-requests` cap (stop after N requests)
+- [x] Body from file (`--body-file`)
+- [x] HTTP/2 support toggle (`--http2`)
+- [x] Variable interpolation (`${REQUEST_ID}`, `${TIMESTAMP_MS}`)
+- [x] DBZ theme cycle in TUI (`t` key) - Earth, Namek, Planet Vegeta, Time Chamber, Tournament, Frieza Force
 
 ### v0.5 — Polish & DX
 
+- [ ] Weighted scenarios (`[[scenarios]]` in TOML)
 - [ ] `kaioken init` - generate starter config file
 - [ ] Shell completions (bash, zsh, fish)
 - [ ] Man page generation

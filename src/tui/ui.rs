@@ -1,3 +1,4 @@
+use crate::tui::theme::ThemeMode;
 use crate::tui::widgets::{LatencyWidget, PowerWidget, StatusWidget};
 use crate::tui::{Flavor, Theme};
 use crate::types::{RunPhase, RunState, StatsSnapshot};
@@ -20,6 +21,7 @@ pub fn render(
     config_duration: Duration,
     config_warmup: Duration,
     theme: &Theme,
+    theme_mode: ThemeMode,
     flavor: &Flavor,
 ) {
     let size = frame.area();
@@ -58,7 +60,7 @@ pub fn render(
 
     StatusWidget::new(snapshot, theme).render(frame, chunks[2]);
 
-    render_footer(frame, chunks[3], state, phase, theme, flavor);
+    render_footer(frame, chunks[3], state, phase, theme, theme_mode, flavor);
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -125,6 +127,7 @@ fn render_footer(
     state: RunState,
     phase: RunPhase,
     theme: &Theme,
+    theme_mode: ThemeMode,
     flavor: &Flavor,
 ) {
     let status = match state {
@@ -143,9 +146,10 @@ fn render_footer(
         RunState::Error => Span::styled("Error!", theme.error),
     };
 
-    let help = Span::styled("  [q]uit  [s]ave  [?]help", theme.muted);
+    let theme_indicator = Span::styled(format!("[{}]", theme_mode.name()), theme.highlight);
+    let help = Span::styled("  [q]uit  [s]ave  [t]heme", theme.muted);
 
-    let line = Line::from(vec![help, Span::raw("    "), status]);
+    let line = Line::from(vec![theme_indicator, help, Span::raw("    "), status]);
 
     let paragraph = Paragraph::new(line);
     frame.render_widget(paragraph, area);

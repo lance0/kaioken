@@ -25,8 +25,11 @@ pub struct TargetConfig {
     #[serde(default)]
     pub headers: HashMap<String, String>,
     pub body: Option<String>,
+    pub body_file: Option<String>,
     #[serde(default)]
     pub insecure: bool,
+    #[serde(default)]
+    pub http2: bool,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -34,6 +37,7 @@ pub struct LoadSettings {
     pub concurrency: Option<u32>,
     #[serde(default, with = "humantime_serde::option")]
     pub duration: Option<Duration>,
+    pub max_requests: Option<u64>,
     pub rate: Option<u32>,
     #[serde(default, with = "humantime_serde::option")]
     pub ramp_up: Option<Duration>,
@@ -106,7 +110,18 @@ pub fn merge_config(args: &RunArgs, toml: Option<TomlConfig>) -> Result<LoadConf
         }
     }
 
-    let body = args.body.clone().or(toml.target.body);
+    // Load body from file if specified
+    let body = if let Some(ref path) = args.body_file {
+        Some(fs::read_to_string(path)
+            .map_err(|e| format!("Failed to read body file '{}': {}", path.display(), e))?)
+    } else if let Some(ref body) = args.body {
+        Some(body.clone())
+    } else if let Some(ref path) = toml.target.body_file {
+        Some(fs::read_to_string(path)
+            .map_err(|e| format!("Failed to read body file '{}': {}", path, e))?)
+    } else {
+        toml.target.body
+    };
 
     let concurrency = if args.concurrency != 50 {
         args.concurrency
@@ -118,6 +133,12 @@ pub fn merge_config(args: &RunArgs, toml: Option<TomlConfig>) -> Result<LoadConf
         args.duration
     } else {
         toml.load.duration.unwrap_or(Duration::from_secs(10))
+    };
+
+    let max_requests = if args.max_requests != 0 {
+        args.max_requests
+    } else {
+        toml.load.max_requests.unwrap_or(0)
     };
 
     let rate = if args.rate != 0 {
@@ -151,6 +172,7 @@ pub fn merge_config(args: &RunArgs, toml: Option<TomlConfig>) -> Result<LoadConf
     };
 
     let insecure = args.insecure || toml.target.insecure;
+    let http2 = args.http2 || toml.target.http2;
 
     Ok(LoadConfig {
         url,
@@ -159,11 +181,13 @@ pub fn merge_config(args: &RunArgs, toml: Option<TomlConfig>) -> Result<LoadConf
         body,
         concurrency,
         duration,
+        max_requests,
         rate,
         ramp_up,
         warmup,
         timeout,
         connect_timeout,
         insecure,
+        http2,
     })
 }
