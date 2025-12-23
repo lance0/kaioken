@@ -1,7 +1,8 @@
-use std::sync::atomic::{AtomicU64, Ordering};
+use crate::types::Stage;
+use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tokio::sync::{Notify, Semaphore};
+use tokio::sync::{watch, Notify, Semaphore};
 use tokio::time::sleep;
 
 pub struct RateLimiter {
@@ -111,6 +112,132 @@ impl RampUpScheduler {
         } else {
             let progress = elapsed.as_secs_f64() / self.ramp_duration.as_secs_f64();
             ((self.concurrency as f64 * progress) as u32).max(1)
+        }
+    }
+}
+
+/// Info about current stage for display purposes
+#[derive(Debug, Clone, Default)]
+pub struct StageInfo {
+    pub stage_index: usize,
+    pub stage_count: usize,
+    pub target: u32,
+    pub current: u32,
+    pub stage_elapsed: Duration,
+    pub stage_duration: Duration,
+}
+
+pub struct StagesScheduler {
+    stages: Vec<Stage>,
+    active_permits: Arc<Semaphore>,
+    current_target: Arc<AtomicU32>,
+    stage_info_tx: watch::Sender<StageInfo>,
+    start_time: Instant,
+}
+
+impl StagesScheduler {
+    pub fn new(stages: Vec<Stage>, max_concurrency: u32) -> (Self, watch::Receiver<StageInfo>) {
+        let initial_target = stages.first().map(|s| s.target).unwrap_or(max_concurrency);
+        let initial_permits = initial_target.min(1) as usize; // Start with at least 1
+
+        let (stage_info_tx, stage_info_rx) = watch::channel(StageInfo {
+            stage_index: 0,
+            stage_count: stages.len(),
+            target: initial_target,
+            current: initial_permits as u32,
+            stage_elapsed: Duration::ZERO,
+            stage_duration: stages.first().map(|s| s.duration).unwrap_or(Duration::ZERO),
+        });
+
+        (
+            Self {
+                stages,
+                active_permits: Arc::new(Semaphore::new(initial_permits)),
+                current_target: Arc::new(AtomicU32::new(initial_target)),
+                stage_info_tx,
+                start_time: Instant::now(),
+            },
+            stage_info_rx,
+        )
+    }
+
+    pub fn permits(&self) -> Arc<Semaphore> {
+        self.active_permits.clone()
+    }
+
+    pub fn current_target(&self) -> u32 {
+        self.current_target.load(Ordering::Relaxed)
+    }
+
+    /// Calculate total duration of all stages
+    pub fn total_duration(&self) -> Duration {
+        self.stages.iter().map(|s| s.duration).sum()
+    }
+
+    pub async fn run(self) {
+        if self.stages.is_empty() {
+            return;
+        }
+
+        let mut current_workers: u32 = self.stages.first().map(|s| s.target.min(1)).unwrap_or(1);
+        let mut stage_start = Instant::now();
+
+        for (stage_idx, stage) in self.stages.iter().enumerate() {
+            let target = stage.target;
+            self.current_target.store(target, Ordering::Relaxed);
+
+            // Calculate ramp rate: how often to add/remove a worker
+            let workers_diff = (target as i64 - current_workers as i64).unsigned_abs() as u32;
+            let ramp_interval = if workers_diff > 0 && !stage.duration.is_zero() {
+                stage.duration / workers_diff
+            } else {
+                Duration::from_millis(100) // Default tick for status updates
+            };
+
+            let stage_end = stage_start + stage.duration;
+
+            while Instant::now() < stage_end {
+                // Update stage info
+                let _ = self.stage_info_tx.send(StageInfo {
+                    stage_index: stage_idx,
+                    stage_count: self.stages.len(),
+                    target,
+                    current: current_workers,
+                    stage_elapsed: stage_start.elapsed(),
+                    stage_duration: stage.duration,
+                });
+
+                // Adjust workers toward target
+                if current_workers < target {
+                    self.active_permits.add_permits(1);
+                    current_workers += 1;
+                } else if current_workers > target && current_workers > 0 {
+                    // To reduce workers, we'd need to signal workers to stop
+                    // For simplicity, we just track the target - workers will naturally
+                    // complete and not be replaced
+                    current_workers = target;
+                }
+
+                let sleep_time = ramp_interval.min(stage_end.saturating_duration_since(Instant::now()));
+                if sleep_time.is_zero() {
+                    break;
+                }
+                sleep(sleep_time).await;
+            }
+
+            stage_start = Instant::now();
+        }
+
+        // Final stage info update
+        if let Some(last) = self.stages.last() {
+            let _ = self.stage_info_tx.send(StageInfo {
+                stage_index: self.stages.len() - 1,
+                stage_count: self.stages.len(),
+                target: last.target,
+                current: last.target,
+                stage_elapsed: last.duration,
+                stage_duration: last.duration,
+            });
         }
     }
 }

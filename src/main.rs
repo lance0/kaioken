@@ -217,6 +217,15 @@ async fn run_load_test(args: &RunArgs) -> Result<i32, String> {
                 eprintln!("  - {}", c.name);
             }
         }
+        if !config.stages.is_empty() {
+            let total: std::time::Duration = config.stages.iter().map(|s| s.duration).sum();
+            let max_target = config.stages.iter().map(|s| s.target).max().unwrap_or(0);
+            eprintln!("Stages:      {} defined (total: {:?}, max workers: {})", 
+                config.stages.len(), total, max_target);
+            for (i, s) in config.stages.iter().enumerate() {
+                eprintln!("  {}. {:?} -> {} workers", i + 1, s.duration, s.target);
+            }
+        }
         return Ok(0);
     }
 

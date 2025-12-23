@@ -1,12 +1,12 @@
 use crate::engine::aggregator::Aggregator;
-use crate::engine::scheduler::{RampUpScheduler, RateLimiter};
+use crate::engine::scheduler::{RampUpScheduler, RateLimiter, StageInfo, StagesScheduler};
 use crate::engine::worker::Worker;
 use crate::engine::Stats;
 use crate::http::create_client;
 use crate::types::{LoadConfig, RequestResult, RunPhase, RunState, StatsSnapshot};
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::{mpsc, watch};
+use tokio::sync::{mpsc, watch, Semaphore};
 use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
 
@@ -19,6 +19,7 @@ pub struct Engine {
     phase_tx: watch::Sender<RunPhase>,
     snapshot_rx: watch::Receiver<StatsSnapshot>,
     snapshot_tx: watch::Sender<StatsSnapshot>,
+    stage_info_rx: Option<watch::Receiver<StageInfo>>,
 }
 
 impl Engine {
@@ -35,6 +36,7 @@ impl Engine {
             phase_tx,
             snapshot_rx,
             snapshot_tx,
+            stage_info_rx: None,
         }
     }
 
@@ -54,7 +56,11 @@ impl Engine {
         self.phase_tx.subscribe()
     }
 
-    pub async fn run(self) -> Result<Stats, String> {
+    pub fn stage_info_rx(&self) -> Option<watch::Receiver<StageInfo>> {
+        self.stage_info_rx.clone()
+    }
+
+    pub async fn run(mut self) -> Result<Stats, String> {
         let client = create_client(
             self.config.concurrency,
             self.config.timeout,
@@ -74,19 +80,31 @@ impl Engine {
             None
         };
 
-        // Set up ramp-up scheduler
-        let ramp_scheduler = RampUpScheduler::new(self.config.concurrency, self.config.ramp_up);
-        let ramp_permits = ramp_scheduler.permits();
-
-        // Start ramp-up task
-        tokio::spawn(ramp_scheduler.run());
+        // Determine if using stages or simple concurrency
+        let use_stages = !self.config.stages.is_empty();
+        let (worker_permits, total_duration, max_workers): (Arc<Semaphore>, Duration, u32) = if use_stages {
+            // Stages mode: use StagesScheduler
+            let max_target = self.config.stages.iter().map(|s| s.target).max().unwrap_or(1);
+            let (stages_scheduler, stage_info_rx) = 
+                StagesScheduler::new(self.config.stages.clone(), max_target);
+            let permits = stages_scheduler.permits();
+            let duration = stages_scheduler.total_duration();
+            self.stage_info_rx = Some(stage_info_rx);
+            tokio::spawn(stages_scheduler.run());
+            (permits, self.config.warmup + duration, max_target)
+        } else {
+            // Simple mode: use RampUpScheduler
+            let ramp_scheduler = RampUpScheduler::new(self.config.concurrency, self.config.ramp_up);
+            let permits = ramp_scheduler.permits();
+            tokio::spawn(ramp_scheduler.run());
+            (permits, self.config.warmup + self.config.duration, self.config.concurrency)
+        };
 
         let (result_tx, result_rx) = mpsc::channel::<RequestResult>(RESULT_CHANNEL_SIZE);
 
         let _ = self.state_tx.send(RunState::Running);
 
-        // Create aggregator with combined duration (warmup + actual)
-        let total_duration = self.config.warmup + self.config.duration;
+        // Create aggregator
         let aggregator = Aggregator::new(
             total_duration,
             result_rx,
@@ -98,11 +116,11 @@ impl Engine {
         );
         let aggregator_handle = tokio::spawn(aggregator.run());
 
-        // Spawn workers
-        let mut worker_handles = Vec::with_capacity(self.config.concurrency as usize);
+        // Spawn workers (up to max needed)
+        let mut worker_handles = Vec::with_capacity(max_workers as usize);
         let scenarios = Arc::new(self.config.scenarios.clone());
 
-        for id in 0..self.config.concurrency {
+        for id in 0..max_workers {
             let worker = Worker::new(
                 id,
                 client.clone(),
@@ -114,7 +132,7 @@ impl Engine {
                 result_tx.clone(),
                 self.cancel_token.clone(),
                 rate_limiter.clone(),
-                ramp_permits.clone(),
+                worker_permits.clone(),
             );
             worker_handles.push(tokio::spawn(worker.run()));
         }
@@ -123,7 +141,7 @@ impl Engine {
 
         let cancel_token = self.cancel_token.clone();
 
-        // Wait for warmup + duration
+        // Wait for total duration
         tokio::select! {
             _ = sleep(total_duration) => {
                 tracing::info!("Duration elapsed, stopping workers");

@@ -3,6 +3,16 @@ use std::collections::HashMap;
 use std::time::Duration;
 
 // ============================================================================
+// Stages (v0.7)
+// ============================================================================
+
+#[derive(Debug, Clone)]
+pub struct Stage {
+    pub duration: Duration,
+    pub target: u32,
+}
+
+// ============================================================================
 // Checks & Thresholds (v0.6)
 // ============================================================================
 
@@ -292,6 +302,7 @@ pub struct LoadConfig {
     pub http2: bool,
     pub thresholds: Vec<Threshold>,
     pub checks: Vec<Check>,
+    pub stages: Vec<Stage>,
 }
 
 impl Default for LoadConfig {
@@ -314,6 +325,7 @@ impl Default for LoadConfig {
             http2: false,
             thresholds: Vec::new(),
             checks: Vec::new(),
+            stages: Vec::new(),
         }
     }
 }

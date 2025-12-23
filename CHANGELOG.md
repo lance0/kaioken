@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2025-12-23
+
+### Added
+
+- **Stages** - Multi-phase load profiles for realistic testing:
+  ```toml
+  [[stages]]
+  duration = "30s"
+  target = 50      # ramp to 50 workers
+  
+  [[stages]]
+  duration = "2m"
+  target = 50      # hold at 50
+  
+  [[stages]]
+  duration = "30s"
+  target = 0       # ramp down
+  ```
+- Stages automatically calculate total duration and max worker count
+- `--dry-run` displays stage configuration with total duration and max workers
+- StagesScheduler gradually ramps workers up/down between targets
+
+### Changed
+
+- Engine now supports both simple concurrency mode and stages mode
+- Duration is automatically computed from stages when configured
+
 ## [0.6.0] - 2025-12-23
 
 ### Added

@@ -1,5 +1,5 @@
 use crate::cli::RunArgs;
-use crate::types::{Check, CheckCondition, LoadConfig, Scenario, Threshold, ThresholdMetric, ThresholdOp};
+use crate::types::{Check, CheckCondition, LoadConfig, Scenario, Stage, Threshold, ThresholdMetric, ThresholdOp};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::fs;
@@ -18,6 +18,15 @@ pub struct TomlConfig {
     pub thresholds: ThresholdsConfig,
     #[serde(default)]
     pub checks: Vec<CheckConfig>,
+    #[serde(default)]
+    pub stages: Vec<StageConfig>,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct StageConfig {
+    #[serde(with = "humantime_serde")]
+    pub duration: Duration,
+    pub target: u32,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -231,6 +240,9 @@ pub fn merge_config(args: &RunArgs, toml: Option<TomlConfig>) -> Result<LoadConf
     // Process checks
     let checks = parse_checks(&toml.checks)?;
 
+    // Process stages
+    let stages = process_stages(&toml.stages);
+
     Ok(LoadConfig {
         url,
         method,
@@ -249,6 +261,7 @@ pub fn merge_config(args: &RunArgs, toml: Option<TomlConfig>) -> Result<LoadConf
         http2,
         thresholds,
         checks,
+        stages,
     })
 }
 
@@ -440,4 +453,14 @@ fn parse_quoted_string(s: &str) -> Result<String, String> {
     } else {
         Err(format!("Expected quoted string, got: '{}'", s))
     }
+}
+
+fn process_stages(configs: &[StageConfig]) -> Vec<Stage> {
+    configs
+        .iter()
+        .map(|cfg| Stage {
+            duration: cfg.duration,
+            target: cfg.target,
+        })
+        .collect()
 }

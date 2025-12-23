@@ -89,11 +89,11 @@ The killer feature for CI/CD pipelines - auto-fail tests based on criteria.
 - [ ] **Check pass rate metric** - Track % of requests passing checks
 - [ ] **Abort on threshold breach** - `--fail-fast` to stop immediately
 
-### v0.7 — Load Profiles & Stages
+### v0.7 — Load Profiles & Stages ✓
 
 Realistic load patterns for capacity planning.
 
-- [ ] **Stages** - Define multi-phase load profiles
+- [x] **Stages** - Define multi-phase load profiles
   ```toml
   [[stages]]
   duration = "30s"

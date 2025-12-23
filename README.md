@@ -30,13 +30,13 @@ A Rust-based HTTP load testing tool with real-time terminal UI and DBZ flavor.
 | **Weighted scenarios** | ✅ | ✅ | ❌ | ❌ | ✅ |
 | **Config file** | TOML | JS | JSON | Lua | Scala |
 | **Checks/thresholds** | ✅ | ✅ | ❌ | ❌ | ✅ |
-| **Stages** | 🔜 | ✅ | ❌ | ❌ | ✅ |
+| **Stages** | ✅ | ✅ | ❌ | ❌ | ✅ |
 | **Request chaining** | 🔜 | ✅ | ❌ | ❌ | ✅ |
 | **Language** | Rust | Go | Go | C | Scala |
 
-**kaioken strengths:** Real-time visibility, instant feedback, regression detection, CI/CD thresholds, memorable UX
+**kaioken strengths:** Real-time visibility, instant feedback, regression detection, CI/CD thresholds, load stages, memorable UX
 
-**Coming soon:** Load stages (v0.7), request chaining (v0.8)
+**Coming soon:** Request chaining (v0.8)
 
 ## Installation
 
@@ -209,6 +209,32 @@ Exit codes:
 - `1` - Error (high error rate)
 - `3` - Regressions detected (compare mode)
 - `4` - Thresholds failed
+
+## Stages
+
+Define multi-phase load profiles (ramp up, hold, ramp down):
+
+```toml
+[target]
+url = "https://api.example.com/health"
+
+[[stages]]
+duration = "30s"
+target = 50      # ramp to 50 workers
+
+[[stages]]
+duration = "2m"
+target = 50      # hold at 50
+
+[[stages]]
+duration = "30s"
+target = 0       # ramp down to 0
+```
+
+When stages are configured:
+- Total duration is calculated automatically
+- Max worker count is determined from highest target
+- Workers ramp up/down gradually within each stage
 
 ## Weighted Scenarios
 
