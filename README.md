@@ -9,13 +9,15 @@ A Rust-based HTTP load testing tool with real-time terminal UI and DBZ flavor.
 
 - **Real-time TUI** - Live metrics with latency percentiles, RPS, status codes
 - **Thresholds** - CI/CD pass/fail criteria (p95 < 500ms, error_rate < 0.01)
+- **Checks** - Response validation (status codes, body content, regex)
+- **Request chaining** - Extract values from responses for subsequent requests
 - **Stages** - Multi-phase load profiles (ramp up → hold → ramp down)
 - **Weighted scenarios** - Multi-endpoint testing with traffic distribution
 - **Rate limiting** - Token bucket algorithm for controlled load
 - **Ramp-up & warmup** - Gradual worker activation and connection priming
 - **Compare mode** - Regression detection with CI-friendly exit codes
 - **Multiple outputs** - JSON, CSV, Markdown, and HTML reports
-- **Variable interpolation** - Dynamic `${REQUEST_ID}` and `${TIMESTAMP_MS}`
+- **Variable interpolation** - Dynamic `${REQUEST_ID}`, `${TIMESTAMP_MS}`, and extracted values
 - **HTTP/2 support** - Optional h2 prior knowledge mode
 - **DBZ themes** - 6 color schemes (press `t` to cycle)
 
@@ -33,12 +35,10 @@ A Rust-based HTTP load testing tool with real-time terminal UI and DBZ flavor.
 | **Config file** | TOML | JS | JSON | Lua | Scala |
 | **Checks/thresholds** | ✅ | ✅ | ❌ | ❌ | ✅ |
 | **Stages** | ✅ | ✅ | ❌ | ❌ | ✅ |
-| **Request chaining** | 🔜 | ✅ | ❌ | ❌ | ✅ |
+| **Request chaining** | ✅ | ✅ | ❌ | ❌ | ✅ |
 | **Language** | Rust | Go | Go | C | Scala |
 
-**kaioken strengths:** Real-time visibility, instant feedback, regression detection, CI/CD thresholds, load stages, memorable UX
-
-**Coming soon:** Request chaining (v0.8)
+**kaioken strengths:** Real-time visibility, instant feedback, regression detection, CI/CD thresholds, load stages, request chaining, memorable UX
 
 ## Installation
 
@@ -214,6 +214,63 @@ Exit codes:
 - `1` - Error (high error rate)
 - `3` - Regressions detected (compare mode)
 - `4` - Thresholds failed
+
+## Checks
+
+Validate response status codes and body content:
+
+```toml
+[[checks]]
+name = "status_ok"
+condition = "status == 200"
+
+[[checks]]
+name = "success_codes"
+condition = "status in [200, 201, 204]"
+
+[[checks]]
+name = "has_data"
+condition = "body contains \"success\""
+
+[[checks]]
+name = "valid_json"
+condition = "body matches \"\\{.*\\}\""
+```
+
+Check results are displayed after the test with pass/fail percentages.
+
+## Request Chaining
+
+Extract values from responses and use in subsequent requests:
+
+```toml
+[[scenarios]]
+name = "login"
+url = "https://api.example.com/auth"
+method = "POST"
+body = '{"user": "test", "pass": "secret"}'
+weight = 0  # weight=0 means dependency only
+
+[scenarios.extract]
+token = "json:$.access_token"
+session_id = "header:X-Session-Id"
+
+[[scenarios]]
+name = "get_profile"
+url = "https://api.example.com/me"
+method = "GET"
+weight = 10
+
+[scenarios.headers]
+Authorization = "Bearer ${token}"
+```
+
+Extraction sources:
+- `json:$.path.to.value` - JSONPath extraction
+- `regex:pattern:group` - Regex capture group
+- `body` - Entire response body
+
+Extracted values are available as `${varname}` in URLs, headers, and body.
 
 ## Stages
 

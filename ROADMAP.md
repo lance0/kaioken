@@ -74,43 +74,22 @@ Fast local load testing against HTTP endpoints with zero setup friction, real-ti
 
 ## Upcoming Milestones
 
+### v0.8 — Request Chaining & Checks ✓
+
+- [x] Response body checks (`body contains`, `body matches`)
+- [x] Response data extraction (`json:`, `regex:`, `body`)
+- [x] Variable interpolation with extracted values (`${varname}`)
+
 ### Deferred Items
 
 Items moved from earlier milestones:
 
-- [ ] **Response body checks** - Validate response content (requires body capture)
 - [ ] **Check pass rate metric** - Track % of requests passing checks
-- [x] **Abort on threshold breach** - `--fail-fast` to stop immediately
-- [x] **Think time / pacing** - Simulate user pauses between requests
 - [ ] **Constant arrival rate** - Fixed RPS regardless of response time
 - [ ] **Ramping arrival rate** - RPS-based stages (not worker-based)
-
-### v0.8 — Request Chaining & Sessions
-
-Dynamic request flows and stateful testing.
-
-- [ ] **Response data extraction** - Capture values for reuse
-  ```toml
-  [[scenarios]]
-  name = "login"
-  url = "https://api.example.com/auth"
-  method = "POST"
-  body = '{"user": "test"}'
-  extract.token = "json:$.access_token"
-  
-  [[scenarios]]
-  name = "get_profile"
-  url = "https://api.example.com/me"
-  headers.Authorization = "Bearer ${token}"
-  depends_on = "login"
-  ```
 - [ ] **Cookie jar** - Automatic session handling
 - [ ] **Redirect control** - `follow_redirects = false`
 - [ ] **Request groups** - Logical grouping for metrics
-  ```toml
-  [[scenarios]]
-  group = "auth_flow"
-  ```
 
 ### v0.9 — Observability & Integration
 

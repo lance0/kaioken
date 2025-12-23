@@ -8,6 +8,7 @@ pub async fn execute_request(
     method: &Method,
     headers: &[(String, String)],
     body: Option<&str>,
+    capture_body: bool,
 ) -> RequestResult {
     let start = Instant::now();
 
@@ -24,9 +25,21 @@ pub async fn execute_request(
     match request.send().await {
         Ok(response) => {
             let status = response.status().as_u16();
-            let latency_us = start.elapsed().as_micros() as u64;
             let content_length = response.content_length().unwrap_or(0);
-            RequestResult::success(latency_us, status, content_length)
+            
+            let response_body = if capture_body {
+                match response.text().await {
+                    Ok(text) => Some(text),
+                    Err(_) => None,
+                }
+            } else {
+                // Consume body to allow connection reuse
+                let _ = response.bytes().await;
+                None
+            };
+            
+            let latency_us = start.elapsed().as_micros() as u64;
+            RequestResult::success(latency_us, status, content_length, response_body)
         }
         Err(err) => {
             let latency_us = start.elapsed().as_micros() as u64;

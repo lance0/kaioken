@@ -205,15 +205,17 @@ pub struct RequestResult {
     pub status: Option<u16>,
     pub error: Option<ErrorKind>,
     pub bytes_received: u64,
+    pub body: Option<String>,
 }
 
 impl RequestResult {
-    pub fn success(latency_us: u64, status: u16, bytes_received: u64) -> Self {
+    pub fn success(latency_us: u64, status: u16, bytes_received: u64, body: Option<String>) -> Self {
         Self {
             latency_us,
             status: Some(status),
             error: None,
             bytes_received,
+            body,
         }
     }
 
@@ -223,6 +225,7 @@ impl RequestResult {
             status: None,
             error: Some(kind),
             bytes_received: 0,
+            body: None,
         }
     }
 
@@ -273,6 +276,48 @@ pub struct TimelineBucket {
     pub errors: u64,
 }
 
+// ============================================================================
+// Extraction (v0.8)
+// ============================================================================
+
+#[derive(Debug, Clone)]
+pub struct Extraction {
+    pub name: String,
+    pub source: ExtractionSource,
+}
+
+#[derive(Debug, Clone)]
+pub enum ExtractionSource {
+    JsonPath(String),         // json:$.access_token
+    Header(String),           // header:X-Request-Id
+    Regex(String, usize),     // regex:token=(\w+):1
+    Body,                     // body (entire response)
+}
+
+impl ExtractionSource {
+    pub fn parse(s: &str) -> Result<Self, String> {
+        if let Some(path) = s.strip_prefix("json:") {
+            Ok(ExtractionSource::JsonPath(path.to_string()))
+        } else if let Some(header) = s.strip_prefix("header:") {
+            Ok(ExtractionSource::Header(header.to_string()))
+        } else if let Some(rest) = s.strip_prefix("regex:") {
+            // Format: regex:pattern:group
+            let parts: Vec<&str> = rest.rsplitn(2, ':').collect();
+            if parts.len() == 2 {
+                let group: usize = parts[0].parse().map_err(|_| "Invalid regex group number")?;
+                let pattern = parts[1].to_string();
+                Ok(ExtractionSource::Regex(pattern, group))
+            } else {
+                Ok(ExtractionSource::Regex(rest.to_string(), 0))
+            }
+        } else if s == "body" {
+            Ok(ExtractionSource::Body)
+        } else {
+            Err(format!("Unknown extraction source: '{}'. Expected json:, header:, regex:, or body", s))
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Scenario {
     pub name: String,
@@ -281,6 +326,8 @@ pub struct Scenario {
     pub headers: Vec<(String, String)>,
     pub body: Option<String>,
     pub weight: u32,
+    pub extractions: Vec<Extraction>,
+    pub depends_on: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -305,6 +352,8 @@ pub struct LoadConfig {
     pub stages: Vec<Stage>,
     pub think_time: Option<Duration>,
     pub fail_fast: bool,
+    pub arrival_rate: Option<u32>,  // Requests per second
+    pub max_vus: Option<u32>,       // Max concurrent requests
 }
 
 impl Default for LoadConfig {
@@ -330,6 +379,8 @@ impl Default for LoadConfig {
             stages: Vec::new(),
             think_time: None,
             fail_fast: false,
+            arrival_rate: None,
+            max_vus: None,
         }
     }
 }

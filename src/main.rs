@@ -255,6 +255,7 @@ async fn run_load_test(args: &RunArgs) -> Result<i32, String> {
     let state_rx = engine.state_rx();
     let phase_rx = engine.phase_rx();
     let fail_fast_flag = engine.threshold_failed_flag();
+    let check_stats_ref = engine.check_stats_ref();
 
     let use_tui = !args.no_tui && !args.json;
     let output_json = args.json;
@@ -338,6 +339,12 @@ async fn run_load_test(args: &RunArgs) -> Result<i32, String> {
         print_threshold_results(&threshold_results);
     }
 
+    // Print check results
+    let check_stats = check_stats_ref.lock().unwrap().clone();
+    if !check_stats.is_empty() && !use_tui && !output_json && format != "json" {
+        print_check_results(&check_stats);
+    }
+
     // Determine exit code
     let fail_fast_triggered = fail_fast_flag.load(Ordering::Relaxed);
     if !thresholds_passed || fail_fast_triggered {
@@ -406,4 +413,32 @@ fn print_summary(snapshot: &types::StatsSnapshot, serious: bool) {
     }
 
     println!("\n{}", "=".repeat(50));
+}
+
+fn print_check_results(check_stats: &std::collections::HashMap<String, (u64, u64)>) {
+    println!("\n{}", "=".repeat(60));
+    println!("CHECKS");
+    println!("{}", "=".repeat(60));
+
+    let mut checks: Vec<_> = check_stats.iter().collect();
+    checks.sort_by_key(|(name, _)| name.as_str());
+
+    for (name, (passed, total)) in checks {
+        let rate = if *total > 0 {
+            (*passed as f64 / *total as f64) * 100.0
+        } else {
+            0.0
+        };
+        let status = if rate >= 100.0 {
+            "\x1b[32m✓\x1b[0m"
+        } else if rate >= 90.0 {
+            "\x1b[33m⚠\x1b[0m"
+        } else {
+            "\x1b[31m✗\x1b[0m"
+        };
+        println!(
+            "  {} {} - {}/{} ({:.1}%)",
+            status, name, passed, total, rate
+        );
+    }
 }

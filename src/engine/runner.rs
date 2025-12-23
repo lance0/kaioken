@@ -1,10 +1,11 @@
 use crate::engine::aggregator::Aggregator;
 use crate::engine::scheduler::{RampUpScheduler, RateLimiter, StageInfo, StagesScheduler};
 use crate::engine::thresholds::evaluate_thresholds;
-use crate::engine::worker::Worker;
+use crate::engine::worker::{CheckResult, Worker};
 use crate::engine::Stats;
 use crate::http::create_client;
-use crate::types::{LoadConfig, RequestResult, RunPhase, RunState, StatsSnapshot, Threshold};
+use crate::types::{Check, LoadConfig, RequestResult, RunPhase, RunState, StatsSnapshot, Threshold};
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -23,6 +24,7 @@ pub struct Engine {
     snapshot_tx: watch::Sender<StatsSnapshot>,
     stage_info_rx: Option<watch::Receiver<StageInfo>>,
     threshold_failed: Arc<AtomicBool>,
+    check_stats: Arc<std::sync::Mutex<HashMap<String, (u64, u64)>>>, // (passed, total)
 }
 
 impl Engine {
@@ -41,6 +43,7 @@ impl Engine {
             snapshot_tx,
             stage_info_rx: None,
             threshold_failed: Arc::new(AtomicBool::new(false)),
+            check_stats: Arc::new(std::sync::Mutex::new(HashMap::new())),
         }
     }
 
@@ -50,6 +53,14 @@ impl Engine {
 
     pub fn threshold_failed_flag(&self) -> Arc<AtomicBool> {
         self.threshold_failed.clone()
+    }
+
+    pub fn check_stats(&self) -> HashMap<String, (u64, u64)> {
+        self.check_stats.lock().unwrap().clone()
+    }
+
+    pub fn check_stats_ref(&self) -> Arc<std::sync::Mutex<HashMap<String, (u64, u64)>>> {
+        self.check_stats.clone()
     }
 
     pub fn cancel_token(&self) -> CancellationToken {
@@ -131,6 +142,32 @@ impl Engine {
         // Spawn workers (up to max needed)
         let mut worker_handles = Vec::with_capacity(max_workers as usize);
         let scenarios = Arc::new(self.config.scenarios.clone());
+        let checks = Arc::new(self.config.checks.clone());
+
+        // Create check results channel if checks are configured
+        let (check_tx, check_rx) = if !self.config.checks.is_empty() {
+            let (tx, rx) = mpsc::channel::<CheckResult>(RESULT_CHANNEL_SIZE);
+            (Some(tx), Some(rx))
+        } else {
+            (None, None)
+        };
+
+        // Spawn check stats aggregator - drains channel completely
+        let check_stats_clone = self.check_stats.clone();
+        let check_agg_handle = if let Some(mut rx) = check_rx {
+            Some(tokio::spawn(async move {
+                while let Some(check_result) = rx.recv().await {
+                    let mut stats = check_stats_clone.lock().unwrap();
+                    let entry = stats.entry(check_result.name).or_insert((0, 0));
+                    if check_result.passed {
+                        entry.0 += 1;
+                    }
+                    entry.1 += 1;
+                }
+            }))
+        } else {
+            None
+        };
 
         for id in 0..max_workers {
             let worker = Worker::new(
@@ -146,11 +183,14 @@ impl Engine {
                 rate_limiter.clone(),
                 worker_permits.clone(),
                 self.config.think_time,
+                checks.clone(),
+                check_tx.clone(),
             );
             worker_handles.push(tokio::spawn(worker.run()));
         }
 
         drop(result_tx);
+        drop(check_tx);
 
         let cancel_token = self.cancel_token.clone();
 
@@ -185,6 +225,11 @@ impl Engine {
 
         // Wait for workers to finish (with timeout)
         for handle in worker_handles {
+            let _ = tokio::time::timeout(Duration::from_secs(1), handle).await;
+        }
+
+        // Wait for check aggregator to drain all results
+        if let Some(handle) = check_agg_handle {
             let _ = tokio::time::timeout(Duration::from_secs(1), handle).await;
         }
 

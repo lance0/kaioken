@@ -7,6 +7,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2025-12-23
+
+### Added
+
+- **Response body checks** - Validate response content with body assertions:
+  ```toml
+  [[checks]]
+  name = "has_success"
+  condition = "body contains \"success\""
+  
+  [[checks]]
+  name = "valid_json"
+  condition = "body matches \"\\{.*\\}\""
+  ```
+- Check results displayed after test with pass/fail percentages
+- **Request chaining** - Extract values from responses for subsequent requests:
+  ```toml
+  [[scenarios]]
+  name = "login"
+  url = "https://api.example.com/auth"
+  method = "POST"
+  body = '{"user": "test"}'
+  
+  [scenarios.extract]
+  token = "json:$.access_token"
+  
+  [[scenarios]]
+  name = "get_profile"
+  url = "https://api.example.com/me"
+  
+  [scenarios.headers]
+  Authorization = "Bearer ${token}"
+  ```
+- Extraction sources: `json:$.path`, `regex:pattern:group`, `body`
+- Extracted values available as `${varname}` in URLs, headers, body
+- Runtime variables (lowercase) preserved through config loading
+
+### Changed
+
+- Response body captured when checks or extractions are configured
+- Environment variable interpolation skips lowercase variable names
+
 ## [0.7.1] - 2025-12-23
 
 ### Added

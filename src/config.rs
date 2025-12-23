@@ -1,5 +1,5 @@
 use crate::cli::RunArgs;
-use crate::types::{Check, CheckCondition, LoadConfig, Scenario, Stage, Threshold, ThresholdMetric, ThresholdOp};
+use crate::types::{Check, CheckCondition, Extraction, ExtractionSource, LoadConfig, Scenario, Stage, Threshold, ThresholdMetric, ThresholdOp};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::fs;
@@ -61,6 +61,9 @@ pub struct ScenarioConfig {
     pub body_file: Option<String>,
     #[serde(default = "default_weight")]
     pub weight: u32,
+    #[serde(default)]
+    pub extract: HashMap<String, String>,
+    pub depends_on: Option<String>,
 }
 
 fn default_method() -> String {
@@ -102,6 +105,8 @@ pub struct LoadSettings {
     pub warmup: Option<Duration>,
     #[serde(default, with = "humantime_serde::option")]
     pub think_time: Option<Duration>,
+    pub arrival_rate: Option<u32>,
+    pub max_vus: Option<u32>,
 }
 
 pub fn load_config(path: &Path) -> Result<TomlConfig, String> {
@@ -127,6 +132,12 @@ fn interpolate_env_vars(content: &str) -> Result<String, String> {
         } else {
             (var_expr, None)
         };
+
+        // Skip runtime variables (lowercase names like extracted values)
+        // Only substitute env vars (typically UPPER_CASE)
+        if var_name.chars().all(|c| c.is_lowercase() || c == '_') {
+            continue; // Leave runtime variables unchanged
+        }
 
         let value = match std::env::var(var_name) {
             Ok(v) => v,
@@ -272,6 +283,8 @@ pub fn merge_config(args: &RunArgs, toml: Option<TomlConfig>) -> Result<LoadConf
         stages,
         think_time,
         fail_fast,
+        arrival_rate: toml.load.arrival_rate,
+        max_vus: toml.load.max_vus,
     })
 }
 
@@ -306,6 +319,17 @@ fn process_scenarios(configs: &[ScenarioConfig]) -> Result<Vec<Scenario>, String
             cfg.body.clone()
         };
 
+        // Parse extractions
+        let mut extractions = Vec::new();
+        for (var_name, source_str) in &cfg.extract {
+            let source = ExtractionSource::parse(source_str)
+                .map_err(|e| format!("Invalid extraction in '{}': {}", name, e))?;
+            extractions.push(Extraction {
+                name: var_name.clone(),
+                source,
+            });
+        }
+
         scenarios.push(Scenario {
             name,
             url: cfg.url.clone(),
@@ -313,6 +337,8 @@ fn process_scenarios(configs: &[ScenarioConfig]) -> Result<Vec<Scenario>, String
             headers,
             body,
             weight: cfg.weight,
+            extractions,
+            depends_on: cfg.depends_on.clone(),
         });
     }
 

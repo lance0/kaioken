@@ -1,6 +1,6 @@
 [package]
 name = "kaioken"
-version = "0.7.1"
+version = "0.8.0"
 edition = "2024"
 description = "A Rust-based HTTP load testing tool with real-time terminal UI and DBZ flavor"
 license = "MIT OR Apache-2.0"
@@ -30,6 +30,7 @@ sha2 = "0.10"
 regex-lite = "0.1"
 chrono = { version = "0.4", features = ["serde"] }
 hostname = "0.4"
+jsonpath-rust = "1.0.4"
 
 [dev-dependencies]
 wiremock = "0.6"
