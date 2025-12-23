@@ -1,4 +1,5 @@
 use clap::Parser;
+use std::path::PathBuf;
 use std::time::Duration;
 
 fn parse_duration(s: &str) -> Result<Duration, humantime::DurationError> {
@@ -16,8 +17,8 @@ fn parse_duration(s: &str) -> Result<Duration, humantime::DurationError> {
 )]
 pub struct Cli {
     /// Target URL to load test
-    #[arg(required = true)]
-    pub url: String,
+    #[arg(required_unless_present = "config")]
+    pub url: Option<String>,
 
     /// Number of concurrent workers
     #[arg(short = 'c', long, default_value = "50")]
@@ -26,6 +27,18 @@ pub struct Cli {
     /// Test duration (e.g., 10s, 1m, 30s)
     #[arg(short = 'd', long, default_value = "10s", value_parser = parse_duration)]
     pub duration: Duration,
+
+    /// Max requests per second (0 = unlimited)
+    #[arg(short = 'r', long, default_value = "0")]
+    pub rate: u32,
+
+    /// Ramp-up time to reach full concurrency (e.g., 5s)
+    #[arg(long, default_value = "0s", value_parser = parse_duration)]
+    pub ramp_up: Duration,
+
+    /// Warmup period before measuring (e.g., 3s)
+    #[arg(long, default_value = "0s", value_parser = parse_duration)]
+    pub warmup: Duration,
 
     /// Request timeout (e.g., 5s)
     #[arg(long, default_value = "5s", value_parser = parse_duration)]
@@ -46,6 +59,10 @@ pub struct Cli {
     /// Request body
     #[arg(short = 'b', long)]
     pub body: Option<String>,
+
+    /// Config file path (TOML)
+    #[arg(short = 'f', long = "config")]
+    pub config: Option<PathBuf>,
 
     /// Output file path for results
     #[arg(short = 'o', long)]
@@ -92,19 +109,5 @@ impl Cli {
                 Ok((parts[0].trim().to_string(), parts[1].trim().to_string()))
             })
             .collect()
-    }
-
-    pub fn parse_method(&self) -> Result<reqwest::Method, String> {
-        self.method
-            .to_uppercase()
-            .parse()
-            .map_err(|_| format!("Invalid HTTP method: {}", self.method))
-    }
-
-    pub fn is_localhost(&self) -> bool {
-        let url_lower = self.url.to_lowercase();
-        url_lower.contains("localhost")
-            || url_lower.contains("127.0.0.1")
-            || url_lower.contains("[::1]")
     }
 }

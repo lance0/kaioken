@@ -1,3 +1,7 @@
+mod csv;
 mod json;
+mod markdown;
 
+pub use csv::{print_csv, write_csv};
 pub use json::{print_json, write_json};
+pub use markdown::{print_markdown, write_markdown};

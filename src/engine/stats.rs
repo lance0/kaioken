@@ -41,9 +41,19 @@ impl Stats {
         }
     }
 
-    pub fn reset_start_time(&mut self) {
+    pub fn reset(&mut self) {
+        self.histogram.reset();
+        self.total_requests = 0;
+        self.successful = 0;
+        self.failed = 0;
+        self.bytes_received = 0;
+        self.status_codes.clear();
+        self.errors.clear();
+        self.timeline.clear();
         self.start_time = Instant::now();
+        self.last_second_requests = 0;
         self.last_second_time = Instant::now();
+        self.rolling_window.clear();
     }
 
     pub fn record(&mut self, result: &RequestResult) {

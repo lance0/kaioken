@@ -1,6 +1,6 @@
 use crate::tui::widgets::{LatencyWidget, PowerWidget, StatusWidget};
 use crate::tui::{Flavor, Theme};
-use crate::types::{RunState, StatsSnapshot};
+use crate::types::{RunPhase, RunState, StatsSnapshot};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     text::{Line, Span},
@@ -9,13 +9,16 @@ use ratatui::{
 };
 use std::time::Duration;
 
+#[allow(clippy::too_many_arguments)]
 pub fn render(
     frame: &mut Frame,
     snapshot: &StatsSnapshot,
     state: RunState,
+    phase: RunPhase,
     config_url: &str,
     config_concurrency: u32,
     config_duration: Duration,
+    config_warmup: Duration,
     theme: &Theme,
     flavor: &Flavor,
 ) {
@@ -36,9 +39,11 @@ pub fn render(
         chunks[0],
         snapshot,
         state,
+        phase,
         config_url,
         config_concurrency,
         config_duration,
+        config_warmup,
         theme,
         flavor,
     );
@@ -53,17 +58,20 @@ pub fn render(
 
     StatusWidget::new(snapshot, theme).render(frame, chunks[2]);
 
-    render_footer(frame, chunks[3], state, theme, flavor);
+    render_footer(frame, chunks[3], state, phase, theme, flavor);
 }
 
+#[allow(clippy::too_many_arguments)]
 fn render_header(
     frame: &mut Frame,
     area: Rect,
     snapshot: &StatsSnapshot,
     state: RunState,
+    phase: RunPhase,
     url: &str,
     concurrency: u32,
     duration: Duration,
+    warmup: Duration,
     theme: &Theme,
     flavor: &Flavor,
 ) {
@@ -71,7 +79,15 @@ fn render_header(
     let total = duration.as_secs();
 
     let title = if state == RunState::Running {
-        flavor.status_running(concurrency)
+        if phase == RunPhase::Warmup {
+            if flavor.serious {
+                "Warming up...".to_string()
+            } else {
+                "Charging...".to_string()
+            }
+        } else {
+            flavor.status_running(concurrency)
+        }
     } else {
         flavor.title().to_string()
     };
@@ -82,13 +98,17 @@ fn render_header(
         url.to_string()
     };
 
+    let time_display = if phase == RunPhase::Warmup && !warmup.is_zero() {
+        let warmup_secs = warmup.as_secs();
+        format!("    [warmup {:02}:{:02}]", warmup_secs / 60, warmup_secs % 60)
+    } else {
+        format!("    [{:02}:{:02}/{:02}:{:02}]", elapsed / 60, elapsed % 60, total / 60, total % 60)
+    };
+
     let header_line = Line::from(vec![
         Span::styled(format!("  {}    ", title), theme.title),
         Span::styled(truncated_url, theme.normal),
-        Span::styled(
-            format!("    [{:02}:{:02}/{:02}:{:02}]", elapsed / 60, elapsed % 60, total / 60, total % 60),
-            theme.muted,
-        ),
+        Span::styled(time_display, theme.muted),
     ]);
 
     let block = Block::default()
@@ -99,10 +119,23 @@ fn render_header(
     frame.render_widget(paragraph, area);
 }
 
-fn render_footer(frame: &mut Frame, area: Rect, state: RunState, theme: &Theme, flavor: &Flavor) {
+fn render_footer(
+    frame: &mut Frame,
+    area: Rect,
+    state: RunState,
+    phase: RunPhase,
+    theme: &Theme,
+    flavor: &Flavor,
+) {
     let status = match state {
         RunState::Initializing => Span::styled(flavor.status_initializing(), theme.muted),
-        RunState::Running => Span::styled("Running...", theme.success),
+        RunState::Running => {
+            if phase == RunPhase::Warmup {
+                Span::styled("Warmup (not measuring)", theme.warning)
+            } else {
+                Span::styled("Running...", theme.success)
+            }
+        }
         RunState::Paused => Span::styled("Paused", theme.warning),
         RunState::Stopping => Span::styled("Stopping...", theme.warning),
         RunState::Completed => Span::styled(flavor.status_completed(), theme.success),

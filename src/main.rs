@@ -1,4 +1,5 @@
 mod cli;
+mod config;
 mod engine;
 mod http;
 mod output;
@@ -7,11 +8,11 @@ mod types;
 
 use clap::Parser;
 use cli::Cli;
+use config::{load_config, merge_config};
 use engine::Engine;
-use output::{print_json, write_json};
+use output::{print_csv, print_json, print_markdown, write_csv, write_json, write_markdown};
 use std::io::{self, Write};
 use tui::App;
-use types::LoadConfig;
 
 #[tokio::main]
 async fn main() {
@@ -31,13 +32,21 @@ async fn main() {
 async fn run() -> Result<(), String> {
     let cli = Cli::parse();
 
-    let headers = cli.parse_headers()?;
-    let method = cli.parse_method()?;
+    // Load TOML config if specified
+    let toml_config = if let Some(ref path) = cli.config {
+        Some(load_config(path)?)
+    } else {
+        None
+    };
 
-    if !cli.yes && !cli.is_localhost() && !cli.quiet && !cli.no_tui && !cli.json {
+    // Merge CLI args with config file
+    let config = merge_config(&cli, toml_config)?;
+
+    // Safety warning for remote targets
+    if !cli.yes && !is_localhost(&config.url) && !cli.quiet && !cli.no_tui && !cli.json {
         eprintln!(
             "\n⚠️  WARNING: Target is remote ({})",
-            extract_host(&cli.url).unwrap_or(&cli.url)
+            extract_host(&config.url).unwrap_or(&config.url)
         );
         eprintln!("    High concurrency may impact production systems.");
         eprint!("    Press Enter to continue or Ctrl+C to abort... ");
@@ -49,31 +58,22 @@ async fn run() -> Result<(), String> {
             .map_err(|e| format!("Failed to read input: {}", e))?;
     }
 
-    let config = LoadConfig {
-        url: cli.url.clone(),
-        method,
-        headers,
-        body: cli.body.clone(),
-        concurrency: cli.concurrency,
-        duration: cli.duration,
-        timeout: cli.timeout,
-        connect_timeout: cli.connect_timeout,
-        insecure: cli.insecure,
-    };
-
     let engine = Engine::new(config.clone());
     let cancel_token = engine.cancel_token();
     let snapshot_rx = engine.snapshot_rx();
     let state_rx = engine.state_rx();
+    let phase_rx = engine.phase_rx();
 
     let use_tui = !cli.no_tui && !cli.json;
     let output_json = cli.json;
+    let format = cli.format.to_lowercase();
 
     let tui_handle = if use_tui {
         let app = App::new(
             config.clone(),
             snapshot_rx.clone(),
             state_rx.clone(),
+            phase_rx,
             cancel_token.clone(),
             cli.serious,
             cli.output.clone(),
@@ -99,16 +99,32 @@ async fn run() -> Result<(), String> {
 
     let final_snapshot = snapshot_rx.borrow().clone();
 
+    // Print output to stdout if in headless mode
     if output_json {
         print_json(&final_snapshot, &config).map_err(|e| format!("Failed to write JSON: {}", e))?;
     } else if !use_tui {
-        print_summary(&final_snapshot, cli.serious);
+        match format.as_str() {
+            "csv" => print_csv(&final_snapshot, &config)
+                .map_err(|e| format!("Failed to write CSV: {}", e))?,
+            "md" | "markdown" => print_markdown(&final_snapshot, &config)
+                .map_err(|e| format!("Failed to write Markdown: {}", e))?,
+            "json" => print_json(&final_snapshot, &config)
+                .map_err(|e| format!("Failed to write JSON: {}", e))?,
+            _ => print_summary(&final_snapshot, cli.serious),
+        }
     }
 
+    // Write to file if specified
     if let Some(path) = &cli.output {
-        if !use_tui || cli.json {
-            write_json(&final_snapshot, &config, path)
-                .map_err(|e| format!("Failed to write output file: {}", e))?;
+        let write_result = match format.as_str() {
+            "csv" => write_csv(&final_snapshot, &config, path),
+            "md" | "markdown" => write_markdown(&final_snapshot, &config, path),
+            _ => write_json(&final_snapshot, &config, path),
+        };
+        write_result.map_err(|e| format!("Failed to write output file: {}", e))?;
+
+        if !cli.quiet && !use_tui {
+            eprintln!("Results written to: {}", path);
         }
     }
 
@@ -117,6 +133,13 @@ async fn run() -> Result<(), String> {
     }
 
     Ok(())
+}
+
+fn is_localhost(url: &str) -> bool {
+    let url_lower = url.to_lowercase();
+    url_lower.contains("localhost")
+        || url_lower.contains("127.0.0.1")
+        || url_lower.contains("[::1]")
 }
 
 fn extract_host(url: &str) -> Option<&str> {

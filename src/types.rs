@@ -136,6 +136,9 @@ pub struct LoadConfig {
     pub body: Option<String>,
     pub concurrency: u32,
     pub duration: Duration,
+    pub rate: u32,
+    pub ramp_up: Duration,
+    pub warmup: Duration,
     pub timeout: Duration,
     pub connect_timeout: Duration,
     pub insecure: bool,
@@ -150,11 +153,20 @@ impl Default for LoadConfig {
             body: None,
             concurrency: 50,
             duration: Duration::from_secs(10),
+            rate: 0,
+            ramp_up: Duration::ZERO,
+            warmup: Duration::ZERO,
             timeout: Duration::from_secs(5),
             connect_timeout: Duration::from_secs(2),
             insecure: false,
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RunPhase {
+    Warmup,
+    Running,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

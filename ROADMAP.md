@@ -10,52 +10,76 @@ Fast local load testing against HTTP endpoints with zero setup friction, real-ti
 
 ## Milestones
 
-### v0.1 — Core (Week 1)
+### v0.1 — Core ✓
 
-- [x] CLI: url, concurrency, duration, timeout, output flags
-- [x] Engine: worker pool, unlimited mode
-- [x] Aggregator: histogram, status codes, error counts, rolling RPS
-- [x] TUI: power panel, latency percentiles, status table
-- [x] JSON export
-- [x] DBZ flavor (toggleable with `--serious`)
+- [x] CLI with clap (url, -c, -d, --timeout, -o, -H, -m, -b)
+- [x] Engine: concurrent worker pool, unlimited throughput mode
+- [x] HTTP client with reqwest (connection pooling, timeouts, TLS)
+- [x] Stats: HDR histogram, status codes, error classification
+- [x] TUI: power panel, latency bars, status codes, errors, sparkline
+- [x] JSON export with full metrics
+- [x] DBZ flavor (`--serious` to disable)
+- [x] Headless mode (`--no-tui`, `--json`)
+- [x] Safety warning for remote targets
 
-### v0.2 — Full Load Control (Week 2)
+### v0.2 — Load Control ✓
 
-- [ ] Headers, method, body support
-- [ ] Rate cap (token bucket)
-- [ ] Ramp-up scheduling
-- [ ] Warmup period
-- [ ] Timeline sparkline in TUI
-- [ ] TOML config file support
-- [ ] CSV/Markdown output formats
+- [x] Rate limiting (`-r, --rate`) with token bucket algorithm
+- [x] Ramp-up (`--ramp-up`) - gradually activate workers
+- [x] Warmup (`--warmup`) - discard initial metrics, prime connections
+- [x] TOML config file support (`-f, --config`)
+- [x] CSV output format (`--format csv`)
+- [x] Markdown output format (`--format md`)
+- [x] Environment variable interpolation in config (`${VAR}`)
 
-### v0.3 — Compare Mode (Week 3)
+### v0.3 — Compare Mode
 
-- [ ] `kaioken compare` subcommand
-- [ ] Compare TUI view with diff visualization
-- [ ] Regression detection (p99, error rate, RPS thresholds)
-- [ ] Config comparability warnings
+- [ ] `kaioken compare <baseline.json> <current.json>` subcommand
+- [ ] Side-by-side diff table (RPS, latency percentiles, error rate)
+- [ ] Regression detection with configurable thresholds
+- [ ] Exit code 3 on regression (for CI gating)
+- [ ] Config compatibility warnings
 
-### v0.4 — Polish (Week 4)
+### v0.4 — Advanced Features
 
-- [ ] Weighted scenarios (multi-endpoint testing)
-- [ ] HTTP/2 toggle
-- [ ] Body read with configurable cap
-- [ ] Statistical significance in compare mode
-- [ ] `--max-requests` cap option
-- [ ] Variable interpolation (`${ENV_VAR}`, `${REQUEST_ID}`)
+- [ ] Weighted scenarios (`[[scenarios]]` in TOML)
+- [ ] `--max-requests` cap (stop after N requests)
+- [ ] Body from file (`--body-file`)
+- [ ] HTTP/2 support toggle
+- [ ] Request body size limit (`--max-body-bytes`)
+- [ ] Variable interpolation (`${REQUEST_ID}`, `${TIMESTAMP_MS}`)
+- [ ] Light/dark theme toggle in TUI (`t` key)
+
+### v0.5 — Polish & DX
+
+- [ ] `kaioken init` - generate starter config file
+- [ ] Shell completions (bash, zsh, fish)
+- [ ] Man page generation
+- [ ] Improved error messages with suggestions
+- [ ] `--dry-run` mode (validate config without running)
+- [ ] Statistical significance in compare (multi-run baselines)
 
 ---
 
 ## Future Considerations
 
-Beyond v0.4, potential directions include:
+- **Distributed mode** — Coordinated multi-node load generation
+- **Lua/Rhai scripting** — Dynamic request generation
+- **WebSocket testing** — Connection upgrade and message load
+- **gRPC support** — Protocol buffer payloads
+- **Keep-alive metrics** — Connection reuse tracking
+- **DNS re-resolution** — For DNS-based load balancing testing
+- **Prometheus metrics endpoint** — Real-time scraping during runs
+- **HTML report export** — Shareable standalone reports
 
-- **Distributed load generation** — Coordinated multi-node testing
-- **Keep-alive metrics** — Connection reuse rate tracking
-- **Request IDs** — Optional per-request tracing
-- **DNS re-resolution** — Periodic re-resolve for DNS-based load balancing
-- **HTTP/2 stream metrics** — Detailed multiplexing visibility
+---
+
+## Non-Goals (v0.x)
+
+- Browser automation / JavaScript execution
+- Distributed coordination (single-node focus)
+- "Pure server latency" (includes client overhead by design)
+- Comprehensive TLS/cert testing matrix
 
 ---
 

@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2025-12-23
+
+### Added
+
+- Rate limiting (`-r, --rate`) with token bucket algorithm for controlled RPS
+- Ramp-up (`--ramp-up`) to gradually activate workers over time
+- Warmup period (`--warmup`) to prime connections before measuring
+- TOML config file support (`-f, --config`) with full feature parity
+- Environment variable interpolation in config files (`${VAR}`, `${VAR:-default}`)
+- CSV output format (`--format csv`)
+- Markdown output format (`--format md`)
+- TUI shows warmup phase indicator ("Charging..." / "Warmup")
+
+### Changed
+
+- URL argument now optional when using config file
+- JSON output includes rate, ramp_up_secs, warmup_secs fields
+
 ## [0.1.1] - 2025-12-23
 
 ### Changed

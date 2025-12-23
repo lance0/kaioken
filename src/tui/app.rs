@@ -1,6 +1,6 @@
 use crate::output::write_json;
 use crate::tui::{ui, Flavor, Theme};
-use crate::types::{LoadConfig, RunState, StatsSnapshot};
+use crate::types::{LoadConfig, RunPhase, RunState, StatsSnapshot};
 use crossterm::{
     event::{self, Event, KeyCode, KeyEventKind},
     execute,
@@ -16,6 +16,7 @@ pub struct App {
     config: LoadConfig,
     snapshot_rx: watch::Receiver<StatsSnapshot>,
     state_rx: watch::Receiver<RunState>,
+    phase_rx: watch::Receiver<RunPhase>,
     cancel_token: CancellationToken,
     theme: Theme,
     flavor: Flavor,
@@ -23,10 +24,12 @@ pub struct App {
 }
 
 impl App {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         config: LoadConfig,
         snapshot_rx: watch::Receiver<StatsSnapshot>,
         state_rx: watch::Receiver<RunState>,
+        phase_rx: watch::Receiver<RunPhase>,
         cancel_token: CancellationToken,
         serious: bool,
         output_path: Option<String>,
@@ -35,6 +38,7 @@ impl App {
             config,
             snapshot_rx,
             state_rx,
+            phase_rx,
             cancel_token,
             theme: Theme::default(),
             flavor: Flavor::new(serious),
@@ -68,15 +72,18 @@ impl App {
         loop {
             let snapshot = self.snapshot_rx.borrow().clone();
             let state = *self.state_rx.borrow();
+            let phase = *self.phase_rx.borrow();
 
             terminal.draw(|frame| {
                 ui::render(
                     frame,
                     &snapshot,
                     state,
+                    phase,
                     &self.config.url,
                     self.config.concurrency,
                     self.config.duration,
+                    self.config.warmup,
                     &self.theme,
                     &self.flavor,
                 );

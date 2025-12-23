@@ -1,12 +1,16 @@
 use crate::engine::{create_snapshot, Stats};
-use crate::types::{RequestResult, StatsSnapshot};
-use std::time::Duration;
+use crate::types::{RequestResult, RunPhase, StatsSnapshot};
+use std::time::{Duration, Instant};
 use tokio::sync::{mpsc, watch};
 
 pub struct Aggregator {
     stats: Stats,
     result_rx: mpsc::Receiver<RequestResult>,
     snapshot_tx: watch::Sender<StatsSnapshot>,
+    warmup_duration: Duration,
+    phase_tx: watch::Sender<RunPhase>,
+    start_time: Instant,
+    warmup_complete: bool,
 }
 
 impl Aggregator {
@@ -14,11 +18,22 @@ impl Aggregator {
         duration: Duration,
         result_rx: mpsc::Receiver<RequestResult>,
         snapshot_tx: watch::Sender<StatsSnapshot>,
+        warmup_duration: Duration,
+        phase_tx: watch::Sender<RunPhase>,
     ) -> Self {
+        let in_warmup = !warmup_duration.is_zero();
+        if !in_warmup {
+            let _ = phase_tx.send(RunPhase::Running);
+        }
+
         Self {
             stats: Stats::new(duration),
             result_rx,
             snapshot_tx,
+            warmup_duration,
+            phase_tx,
+            start_time: Instant::now(),
+            warmup_complete: !in_warmup,
         }
     }
 
@@ -33,7 +48,10 @@ impl Aggregator {
                 result = self.result_rx.recv() => {
                     match result {
                         Some(req_result) => {
-                            self.stats.record(&req_result);
+                            self.check_warmup_complete();
+                            if self.warmup_complete {
+                                self.stats.record(&req_result);
+                            }
                         }
                         None => {
                             self.send_snapshot();
@@ -43,12 +61,22 @@ impl Aggregator {
                 }
 
                 _ = snapshot_interval.tick() => {
+                    self.check_warmup_complete();
                     self.send_snapshot();
                 }
             }
         }
 
         self.stats
+    }
+
+    fn check_warmup_complete(&mut self) {
+        if !self.warmup_complete && self.start_time.elapsed() >= self.warmup_duration {
+            self.warmup_complete = true;
+            self.stats.reset();
+            let _ = self.phase_tx.send(RunPhase::Running);
+            tracing::info!("Warmup complete, starting measurement");
+        }
     }
 
     fn send_snapshot(&self) {

@@ -37,6 +37,9 @@ pub struct Target {
 #[derive(Serialize)]
 pub struct Load {
     pub concurrency: u32,
+    pub rate: u32,
+    pub ramp_up_secs: u64,
+    pub warmup_secs: u64,
     pub timeout_ms: u64,
 }
 
@@ -141,6 +144,9 @@ pub fn create_output(snapshot: &StatsSnapshot, config: &LoadConfig) -> JsonOutpu
             },
             load: Load {
                 concurrency: config.concurrency,
+                rate: config.rate,
+                ramp_up_secs: config.ramp_up.as_secs(),
+                warmup_secs: config.warmup.as_secs(),
                 timeout_ms: config.timeout.as_millis() as u64,
             },
             env: Environment {
