@@ -303,6 +303,8 @@ pub struct LoadConfig {
     pub thresholds: Vec<Threshold>,
     pub checks: Vec<Check>,
     pub stages: Vec<Stage>,
+    pub think_time: Option<Duration>,
+    pub fail_fast: bool,
 }
 
 impl Default for LoadConfig {
@@ -326,6 +328,8 @@ impl Default for LoadConfig {
             thresholds: Vec::new(),
             checks: Vec::new(),
             stages: Vec::new(),
+            think_time: None,
+            fail_fast: false,
         }
     }
 }

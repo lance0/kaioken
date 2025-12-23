@@ -14,6 +14,7 @@ use config::{load_config, merge_config};
 use engine::{evaluate_thresholds, print_threshold_results, Engine};
 use output::{print_csv, print_html, print_json, print_markdown, write_csv, write_html, write_json, write_markdown};
 use std::io::{self, Write};
+use std::sync::atomic::Ordering;
 use tui::App;
 
 #[tokio::main]
@@ -191,6 +192,9 @@ async fn run_load_test(args: &RunArgs) -> Result<i32, String> {
         if !config.warmup.is_zero() {
             eprintln!("Warmup:      {:?}", config.warmup);
         }
+        if let Some(think_time) = config.think_time {
+            eprintln!("Think time:  {:?}", think_time);
+        }
         if config.http2 {
             eprintln!("HTTP/2:      enabled");
         }
@@ -250,6 +254,7 @@ async fn run_load_test(args: &RunArgs) -> Result<i32, String> {
     let snapshot_rx = engine.snapshot_rx();
     let state_rx = engine.state_rx();
     let phase_rx = engine.phase_rx();
+    let fail_fast_flag = engine.threshold_failed_flag();
 
     let use_tui = !args.no_tui && !args.json;
     let output_json = args.json;
@@ -334,7 +339,8 @@ async fn run_load_test(args: &RunArgs) -> Result<i32, String> {
     }
 
     // Determine exit code
-    if !thresholds_passed {
+    let fail_fast_triggered = fail_fast_flag.load(Ordering::Relaxed);
+    if !thresholds_passed || fail_fast_triggered {
         Ok(4) // Thresholds failed
     } else if stats.failed > 0 && stats.error_rate() > 0.5 {
         Ok(1) // High error rate

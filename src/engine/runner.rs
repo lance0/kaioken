@@ -1,9 +1,11 @@
 use crate::engine::aggregator::Aggregator;
 use crate::engine::scheduler::{RampUpScheduler, RateLimiter, StageInfo, StagesScheduler};
+use crate::engine::thresholds::evaluate_thresholds;
 use crate::engine::worker::Worker;
 use crate::engine::Stats;
 use crate::http::create_client;
-use crate::types::{LoadConfig, RequestResult, RunPhase, RunState, StatsSnapshot};
+use crate::types::{LoadConfig, RequestResult, RunPhase, RunState, StatsSnapshot, Threshold};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::{mpsc, watch, Semaphore};
@@ -20,6 +22,7 @@ pub struct Engine {
     snapshot_rx: watch::Receiver<StatsSnapshot>,
     snapshot_tx: watch::Sender<StatsSnapshot>,
     stage_info_rx: Option<watch::Receiver<StageInfo>>,
+    threshold_failed: Arc<AtomicBool>,
 }
 
 impl Engine {
@@ -37,7 +40,16 @@ impl Engine {
             snapshot_rx,
             snapshot_tx,
             stage_info_rx: None,
+            threshold_failed: Arc::new(AtomicBool::new(false)),
         }
+    }
+
+    pub fn threshold_failed(&self) -> bool {
+        self.threshold_failed.load(Ordering::Relaxed)
+    }
+
+    pub fn threshold_failed_flag(&self) -> Arc<AtomicBool> {
+        self.threshold_failed.clone()
     }
 
     pub fn cancel_token(&self) -> CancellationToken {
@@ -133,6 +145,7 @@ impl Engine {
                 self.cancel_token.clone(),
                 rate_limiter.clone(),
                 worker_permits.clone(),
+                self.config.think_time,
             );
             worker_handles.push(tokio::spawn(worker.run()));
         }
@@ -140,6 +153,19 @@ impl Engine {
         drop(result_tx);
 
         let cancel_token = self.cancel_token.clone();
+
+        // Spawn fail-fast threshold checker if enabled
+        let fail_fast_handle = if self.config.fail_fast && !self.config.thresholds.is_empty() {
+            let thresholds = self.config.thresholds.clone();
+            let snapshot_rx = self.snapshot_rx.clone();
+            let cancel = cancel_token.clone();
+            let threshold_failed = self.threshold_failed.clone();
+            Some(tokio::spawn(async move {
+                run_fail_fast_checker(thresholds, snapshot_rx, cancel, threshold_failed).await
+            }))
+        } else {
+            None
+        };
 
         // Wait for total duration
         tokio::select! {
@@ -150,6 +176,11 @@ impl Engine {
             _ = cancel_token.cancelled() => {
                 tracing::info!("Cancellation requested");
             }
+        }
+
+        // Cancel fail-fast checker if running
+        if let Some(handle) = fail_fast_handle {
+            handle.abort();
         }
 
         // Wait for workers to finish (with timeout)
@@ -169,5 +200,46 @@ impl Engine {
         let _ = self.state_tx.send(final_state);
 
         Ok(stats)
+    }
+}
+
+async fn run_fail_fast_checker(
+    thresholds: Vec<Threshold>,
+    mut snapshot_rx: watch::Receiver<StatsSnapshot>,
+    cancel_token: CancellationToken,
+    threshold_failed: Arc<AtomicBool>,
+) {
+    // Wait a bit before starting checks (need some data first)
+    sleep(Duration::from_secs(2)).await;
+
+    loop {
+        tokio::select! {
+            _ = sleep(Duration::from_secs(1)) => {
+                let snapshot = snapshot_rx.borrow().clone();
+
+                // Only check if we have some requests
+                if snapshot.total_requests == 0 {
+                    continue;
+                }
+
+                let results = evaluate_thresholds(&thresholds, &snapshot);
+                let any_failed = results.iter().any(|r| !r.passed);
+
+                if any_failed {
+                    eprintln!("\n\x1b[31m⚠ FAIL-FAST: Threshold breached, aborting test\x1b[0m");
+                    for result in &results {
+                        if !result.passed {
+                            eprintln!("  \x1b[31m✗ {} (actual: {:.2})\x1b[0m", result.condition, result.actual);
+                        }
+                    }
+                    threshold_failed.store(true, Ordering::Relaxed);
+                    cancel_token.cancel();
+                    break;
+                }
+            }
+            _ = cancel_token.cancelled() => {
+                break;
+            }
+        }
     }
 }

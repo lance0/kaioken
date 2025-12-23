@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.1] - 2025-12-23
+
+### Added
+
+- **Think time** - Pause between requests to simulate realistic user behavior:
+  - CLI: `--think-time 500ms`
+  - Config: `think_time = "500ms"` in `[load]` section
+- **Fail-fast mode** - Abort test immediately when any threshold breaches:
+  - CLI: `--fail-fast`
+  - Checks thresholds every second during the test
+  - Exits with code 4 when threshold breaches detected
+
 ## [0.7.0] - 2025-12-23
 
 ### Added

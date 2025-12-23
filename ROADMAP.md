@@ -80,8 +80,8 @@ Items moved from earlier milestones:
 
 - [ ] **Response body checks** - Validate response content (requires body capture)
 - [ ] **Check pass rate metric** - Track % of requests passing checks
-- [ ] **Abort on threshold breach** - `--fail-fast` to stop immediately
-- [ ] **Think time / pacing** - Simulate user pauses between requests
+- [x] **Abort on threshold breach** - `--fail-fast` to stop immediately
+- [x] **Think time / pacing** - Simulate user pauses between requests
 - [ ] **Constant arrival rate** - Fixed RPS regardless of response time
 - [ ] **Ramping arrival rate** - RPS-based stages (not worker-based)
 

@@ -3,8 +3,9 @@ use crate::http::execute_request;
 use crate::types::{RequestResult, Scenario};
 use reqwest::{Client, Method};
 use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::{mpsc, Semaphore};
+use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
 
 pub struct Worker {
@@ -20,6 +21,7 @@ pub struct Worker {
     cancel_token: CancellationToken,
     rate_limiter: Option<Arc<RateLimiter>>,
     ramp_permits: Arc<Semaphore>,
+    think_time: Option<Duration>,
 }
 
 impl Worker {
@@ -36,6 +38,7 @@ impl Worker {
         cancel_token: CancellationToken,
         rate_limiter: Option<Arc<RateLimiter>>,
         ramp_permits: Arc<Semaphore>,
+        think_time: Option<Duration>,
     ) -> Self {
         let total_weight: u32 = scenarios.iter().map(|s| s.weight).sum();
 
@@ -52,6 +55,7 @@ impl Worker {
             cancel_token,
             rate_limiter,
             ramp_permits,
+            think_time,
         }
     }
 
@@ -121,6 +125,14 @@ impl Worker {
 
             if self.result_tx.send(result).await.is_err() {
                 break;
+            }
+
+            // Think time - pause between requests
+            if let Some(think_time) = self.think_time {
+                tokio::select! {
+                    _ = sleep(think_time) => {}
+                    _ = self.cancel_token.cancelled() => break,
+                }
             }
         }
 

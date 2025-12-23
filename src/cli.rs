@@ -72,6 +72,10 @@ pub struct RunArgs {
     #[arg(long, default_value = "0s", value_parser = parse_duration)]
     pub warmup: Duration,
 
+    /// Think time between requests (e.g., 500ms)
+    #[arg(long, value_parser = parse_duration)]
+    pub think_time: Option<Duration>,
+
     /// Request timeout (e.g., 5s)
     #[arg(long, default_value = "5s", value_parser = parse_duration)]
     pub timeout: Duration,
@@ -143,6 +147,10 @@ pub struct RunArgs {
     /// Validate config and exit without running
     #[arg(long)]
     pub dry_run: bool,
+
+    /// Abort immediately when any threshold fails
+    #[arg(long)]
+    pub fail_fast: bool,
 }
 
 #[derive(Parser, Debug)]

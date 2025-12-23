@@ -100,6 +100,8 @@ pub struct LoadSettings {
     pub ramp_up: Option<Duration>,
     #[serde(default, with = "humantime_serde::option")]
     pub warmup: Option<Duration>,
+    #[serde(default, with = "humantime_serde::option")]
+    pub think_time: Option<Duration>,
 }
 
 pub fn load_config(path: &Path) -> Result<TomlConfig, String> {
@@ -243,6 +245,12 @@ pub fn merge_config(args: &RunArgs, toml: Option<TomlConfig>) -> Result<LoadConf
     // Process stages
     let stages = process_stages(&toml.stages);
 
+    // Think time - CLI takes precedence
+    let think_time = args.think_time.or(toml.load.think_time);
+
+    // Fail fast
+    let fail_fast = args.fail_fast;
+
     Ok(LoadConfig {
         url,
         method,
@@ -262,6 +270,8 @@ pub fn merge_config(args: &RunArgs, toml: Option<TomlConfig>) -> Result<LoadConf
         thresholds,
         checks,
         stages,
+        think_time,
+        fail_fast,
     })
 }
 

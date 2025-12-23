@@ -95,6 +95,7 @@ kaioken run [OPTIONS] [URL]
 | `-r, --rate` | 0 | Max RPS (0 = unlimited) |
 | `--ramp-up` | 0s | Time to reach full concurrency |
 | `--warmup` | 0s | Warmup period (not measured) |
+| `--think-time` | — | Pause between requests (e.g., 500ms) |
 | `-m, --method` | GET | HTTP method |
 | `-H, --header` | — | Header (repeatable) |
 | `-b, --body` | — | Request body |
@@ -106,6 +107,7 @@ kaioken run [OPTIONS] [URL]
 | `--no-tui` | false | Headless mode |
 | `--json` | false | Shorthand for `--no-tui --format json` |
 | `--dry-run` | false | Validate config and exit |
+| `--fail-fast` | false | Abort immediately on threshold breach |
 | `--serious` | false | Disable DBZ flavor |
 | `--insecure` | false | Skip TLS verification |
 | `-y, --yes` | false | Skip remote target confirmation |
@@ -182,6 +184,7 @@ duration = "30s"
 # rate = 500
 # ramp_up = "5s"
 # warmup = "3s"
+# think_time = "500ms"
 ```
 
 Environment variables: `${VAR}` or `${VAR:-default}`
