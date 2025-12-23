@@ -51,26 +51,7 @@ kaioken completions bash >> ~/.bashrc
 
 ## TUI Preview
 
-```
-┌───────────────────────────────────────────────────────────────┐
-│ KAIOKEN x100   https://api.example.com/users    [00:15/00:30] │
-├───────────────────────────────┬───────────────────────────────┤
-│ POWER LEVEL                   │ LATENCY (ms)                  │
-│                               │                               │
-│ Rolling RPS: 8,432  [VEGETA]  │ p50:   12ms  ████             │
-│ Total:       126,480          │ p90:   45ms  ████████         │
-│ Errors:      23 (0.02%)       │ p95:   89ms  ██████████       │
-│                               │ p99:  230ms  █████████████    │
-│ ▁▂▃▅▆▇█▇▆▅▄▃▂▁▂▃▄▅▆▇          │ p999: 567ms  ██████████████   │
-├───────────────────────────────┼───────────────────────────────┤
-│ STATUS CODES                  │ ERRORS                        │
-│                               │                               │
-│ 200  ████████████████  84012  │ timeout      15               │
-│ 201  ██                  312  │ connect       5               │
-│ 500  ▏                    23  │ reset         3               │
-└───────────────────────────────┴───────────────────────────────┘
-[Earth]  [q]uit  [s]ave  [t]heme                      Running...
-```
+![kaioken TUI](kaioken.png)
 
 Press `t` to cycle themes: Earth → Namek → Planet Vegeta → Time Chamber → Tournament → Frieza Force
 
