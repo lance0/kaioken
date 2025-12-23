@@ -4,11 +4,11 @@ A Rust-based HTTP load testing tool with real-time terminal UI and DBZ flavor.
 
 ## Vision
 
-Fast local load testing against HTTP endpoints with zero setup friction, real-time visibility, deterministic artifacts, and a memorable DBZ-themed UX.
+Fast local load testing against HTTP endpoints with zero setup friction, real-time visibility, deterministic artifacts, and a memorable DBZ-themed UX. CI/CD ready with checks and thresholds.
 
 ---
 
-## Milestones
+## Completed Milestones
 
 ### v0.1 — Core ✓
 
@@ -46,7 +46,7 @@ Fast local load testing against HTTP endpoints with zero setup friction, real-ti
 - [x] Body from file (`--body-file`)
 - [x] HTTP/2 support toggle (`--http2`)
 - [x] Variable interpolation (`${REQUEST_ID}`, `${TIMESTAMP_MS}`)
-- [x] DBZ theme cycle in TUI (`t` key) - Earth, Namek, Planet Vegeta, Time Chamber, Tournament, Frieza Force
+- [x] DBZ theme cycle in TUI (`t` key) - 6 themes
 
 ### v0.5 — Polish & DX ✓
 
@@ -56,29 +56,157 @@ Fast local load testing against HTTP endpoints with zero setup friction, real-ti
 - [x] `--dry-run` mode (validate config without running)
 - [x] Man page generation (`kaioken man`)
 - [x] HTML report export (`--format html`)
-- [ ] Improved error messages with suggestions
-- [ ] Statistical significance in compare (multi-run baselines)
 
 ---
 
-## Future Considerations
+## Upcoming Milestones
 
-- **Distributed mode** — Coordinated multi-node load generation
-- **Lua/Rhai scripting** — Dynamic request generation
-- **WebSocket testing** — Connection upgrade and message load
-- **gRPC support** — Protocol buffer payloads
-- **Keep-alive metrics** — Connection reuse tracking
-- **DNS re-resolution** — For DNS-based load balancing testing
-- **Prometheus metrics endpoint** — Real-time scraping during runs
+### v0.6 — Checks & Thresholds (CI/CD Ready)
+
+The killer feature for CI/CD pipelines - auto-fail tests based on criteria.
+
+- [ ] **Thresholds in config** - Pass/fail criteria for metrics
+  ```toml
+  [thresholds]
+  p95_latency_ms = "< 500"
+  p99_latency_ms = "< 1000"
+  error_rate = "< 0.01"
+  rps = "> 100"
+  ```
+- [ ] **Exit code 4** when thresholds fail (distinct from errors/regressions)
+- [ ] **Threshold results in output** - Show pass/fail status in JSON/HTML
+- [ ] **Response body checks** - Validate response content
+  ```toml
+  [[checks]]
+  name = "status_ok"
+  condition = "status == 200 || status == 201"
+  
+  [[checks]]
+  name = "has_data"
+  condition = "body contains 'success'"
+  ```
+- [ ] **Check pass rate metric** - Track % of requests passing checks
+- [ ] **Abort on threshold breach** - `--fail-fast` to stop immediately
+
+### v0.7 — Load Profiles & Stages
+
+Realistic load patterns for capacity planning.
+
+- [ ] **Stages** - Define multi-phase load profiles
+  ```toml
+  [[stages]]
+  duration = "30s"
+  target = 50      # ramp to 50 workers
+  
+  [[stages]]
+  duration = "2m"
+  target = 50      # hold at 50
+  
+  [[stages]]
+  duration = "30s"
+  target = 0       # ramp down
+  ```
+- [ ] **Think time / pacing** - Simulate user pauses
+  ```toml
+  [load]
+  think_time = "500ms"           # fixed delay
+  think_time_range = "100ms-2s"  # random range
+  ```
+- [ ] **Constant arrival rate** - Fixed RPS regardless of response time
+- [ ] **Ramping arrival rate** - RPS-based stages (not worker-based)
+
+### v0.8 — Request Chaining & Sessions
+
+Dynamic request flows and stateful testing.
+
+- [ ] **Response data extraction** - Capture values for reuse
+  ```toml
+  [[scenarios]]
+  name = "login"
+  url = "https://api.example.com/auth"
+  method = "POST"
+  body = '{"user": "test"}'
+  extract.token = "json:$.access_token"
+  
+  [[scenarios]]
+  name = "get_profile"
+  url = "https://api.example.com/me"
+  headers.Authorization = "Bearer ${token}"
+  depends_on = "login"
+  ```
+- [ ] **Cookie jar** - Automatic session handling
+- [ ] **Redirect control** - `follow_redirects = false`
+- [ ] **Request groups** - Logical grouping for metrics
+  ```toml
+  [[scenarios]]
+  group = "auth_flow"
+  ```
+
+### v0.9 — Observability & Integration
+
+Enterprise-grade monitoring and reporting.
+
+- [ ] **Tags** - Label requests for filtering
+  ```toml
+  [[scenarios]]
+  tags = { endpoint = "users", version = "v2" }
+  ```
+- [ ] **Prometheus metrics endpoint** - Real-time scraping during runs
+- [ ] **InfluxDB export** - Time-series metrics output
+- [ ] **Custom metrics** - User-defined counters/gauges
+- [ ] **Improved error messages** - Suggestions for common mistakes
+
+### v1.0 — Production Ready
+
+Stability, documentation, and ecosystem.
+
+- [ ] **Comprehensive test suite** - Unit, integration, e2e tests
+- [ ] **Performance benchmarks** - kaioken vs wrk/vegeta/k6
+- [ ] **User guide documentation** - Full docs site
+- [ ] **Plugin system** - Custom output formats, checks
+- [ ] **Statistical significance** - Multi-run baseline comparison
 
 ---
 
-## Non-Goals (v0.x)
+## Future Considerations (Post v1.0)
+
+**Protocol Support:**
+- WebSocket testing — Connection upgrade and message load
+- gRPC support — Protocol buffer payloads
+- GraphQL — Query-aware load testing
+
+**Advanced Features:**
+- Distributed mode — Coordinated multi-node load generation
+- Lua/Rhai scripting — Dynamic request generation
+- File uploads — multipart/form-data support
+- Proxy support — HTTP/SOCKS proxy
+
+**Metrics & Analysis:**
+- Keep-alive metrics — Connection reuse tracking
+- DNS re-resolution — For DNS-based load balancing
+- Flame graphs — CPU profiling integration
+- Anomaly detection — AI-powered regression detection
+
+---
+
+## Non-Goals (v1.x)
 
 - Browser automation / JavaScript execution
-- Distributed coordination (single-node focus)
-- "Pure server latency" (includes client overhead by design)
+- Distributed coordination requiring external infrastructure
+- "Pure server latency" measurement (includes client overhead by design)
 - Comprehensive TLS/cert testing matrix
+- GUI application (TUI is the interface)
+
+---
+
+## Exit Codes
+
+| Code | Meaning |
+|------|---------|
+| 0 | Success |
+| 1 | Error (high error rate, config issues) |
+| 3 | Regressions detected (compare mode) |
+| 4 | Thresholds failed (v0.6+) |
 
 ---
 
