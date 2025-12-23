@@ -129,11 +129,22 @@ pub struct TimelineBucket {
 }
 
 #[derive(Debug, Clone)]
+pub struct Scenario {
+    pub name: String,
+    pub url: String,
+    pub method: reqwest::Method,
+    pub headers: Vec<(String, String)>,
+    pub body: Option<String>,
+    pub weight: u32,
+}
+
+#[derive(Debug, Clone)]
 pub struct LoadConfig {
     pub url: String,
     pub method: reqwest::Method,
     pub headers: Vec<(String, String)>,
     pub body: Option<String>,
+    pub scenarios: Vec<Scenario>,
     pub concurrency: u32,
     pub duration: Duration,
     pub max_requests: u64,
@@ -153,6 +164,7 @@ impl Default for LoadConfig {
             method: reqwest::Method::GET,
             headers: Vec::new(),
             body: None,
+            scenarios: Vec::new(),
             concurrency: 50,
             duration: Duration::from_secs(10),
             max_requests: 0,

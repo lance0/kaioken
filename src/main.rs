@@ -42,7 +42,91 @@ async fn run() -> Result<i32, String> {
     match cli.command {
         Commands::Run(args) => run_load_test(&args).await,
         Commands::Compare(args) => run_compare(&args),
+        Commands::Init(args) => run_init(&args),
+        Commands::Completions(args) => {
+            cli::generate_completions(args.shell);
+            Ok(0)
+        }
     }
+}
+
+fn run_init(args: &cli::InitArgs) -> Result<i32, String> {
+    use std::fs;
+
+    if args.output.exists() && !args.force {
+        return Err(format!(
+            "File '{}' already exists. Use --force to overwrite.",
+            args.output.display()
+        ));
+    }
+
+    let url = args.url.as_deref().unwrap_or("https://api.example.com/health");
+
+    let config = format!(
+        r#"# Kaioken Load Test Configuration
+# https://github.com/lance0/kaioken
+
+[target]
+url = "{url}"
+method = "GET"
+timeout = "5s"
+connect_timeout = "2s"
+# http2 = false
+# insecure = false
+
+# Headers (uncomment and modify as needed)
+# [target.headers]
+# Authorization = "Bearer ${{API_TOKEN}}"
+# Content-Type = "application/json"
+
+# Request body (for POST/PUT/PATCH)
+# body = '{{"key": "value"}}'
+# body_file = "payload.json"
+
+[load]
+concurrency = 50
+duration = "30s"
+# max_requests = 0      # 0 = unlimited
+# rate = 0              # requests/sec, 0 = unlimited
+# ramp_up = "0s"        # time to reach full concurrency
+# warmup = "0s"         # warmup period (not measured)
+
+# Variable interpolation available in URL, headers, and body:
+#   ${{REQUEST_ID}}    - unique ID per request
+#   ${{TIMESTAMP_MS}}  - current epoch time in milliseconds
+
+# Weighted scenarios (optional) - when defined, these override [target]
+# Traffic is distributed based on weight (e.g., 7:2:1 ratio below)
+#
+# [[scenarios]]
+# name = "get_users"
+# url = "https://api.example.com/users"
+# method = "GET"
+# weight = 7
+#
+# [[scenarios]]
+# name = "create_user"
+# url = "https://api.example.com/users"
+# method = "POST"
+# body = '{{"name": "test"}}'
+# weight = 2
+#
+# [[scenarios]]
+# name = "health_check"
+# url = "https://api.example.com/health"
+# method = "GET"
+# weight = 1
+"#,
+        url = url
+    );
+
+    fs::write(&args.output, config)
+        .map_err(|e| format!("Failed to write config file: {}", e))?;
+
+    eprintln!("Created config file: {}", args.output.display());
+    eprintln!("\nRun with: kaioken run -f {}", args.output.display());
+
+    Ok(0)
 }
 
 fn run_compare(args: &cli::CompareArgs) -> Result<i32, String> {
@@ -71,6 +155,49 @@ async fn run_load_test(args: &RunArgs) -> Result<i32, String> {
 
     // Merge CLI args with config file
     let config = merge_config(args, toml_config)?;
+
+    // Dry run - validate and exit
+    if args.dry_run {
+        eprintln!("Configuration validated successfully!\n");
+        if config.scenarios.is_empty() {
+            eprintln!("Target:      {}", config.url);
+            eprintln!("Method:      {}", config.method);
+        } else {
+            eprintln!("Scenarios:   {} defined", config.scenarios.len());
+            let total_weight: u32 = config.scenarios.iter().map(|s| s.weight).sum();
+            for s in &config.scenarios {
+                let pct = (s.weight as f64 / total_weight as f64) * 100.0;
+                eprintln!(
+                    "  - {} ({} {}) weight={} ({:.0}%)",
+                    s.name, s.method, s.url, s.weight, pct
+                );
+            }
+        }
+        eprintln!("Concurrency: {}", config.concurrency);
+        eprintln!("Duration:    {:?}", config.duration);
+        if config.max_requests > 0 {
+            eprintln!("Max Reqs:    {}", config.max_requests);
+        }
+        if config.rate > 0 {
+            eprintln!("Rate Limit:  {} req/s", config.rate);
+        }
+        if !config.ramp_up.is_zero() {
+            eprintln!("Ramp Up:     {:?}", config.ramp_up);
+        }
+        if !config.warmup.is_zero() {
+            eprintln!("Warmup:      {:?}", config.warmup);
+        }
+        if config.http2 {
+            eprintln!("HTTP/2:      enabled");
+        }
+        if !config.headers.is_empty() {
+            eprintln!("Headers:     {} custom", config.headers.len());
+        }
+        if config.body.is_some() {
+            eprintln!("Body:        present");
+        }
+        return Ok(0);
+    }
 
     // Safety warning for remote targets
     if !args.yes && !is_localhost(&config.url) && !args.quiet && !args.no_tui && !args.json {

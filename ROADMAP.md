@@ -48,14 +48,14 @@ Fast local load testing against HTTP endpoints with zero setup friction, real-ti
 - [x] Variable interpolation (`${REQUEST_ID}`, `${TIMESTAMP_MS}`)
 - [x] DBZ theme cycle in TUI (`t` key) - Earth, Namek, Planet Vegeta, Time Chamber, Tournament, Frieza Force
 
-### v0.5 — Polish & DX
+### v0.5 — Polish & DX ✓
 
-- [ ] Weighted scenarios (`[[scenarios]]` in TOML)
-- [ ] `kaioken init` - generate starter config file
-- [ ] Shell completions (bash, zsh, fish)
+- [x] Weighted scenarios (`[[scenarios]]` in TOML)
+- [x] `kaioken init` - generate starter config file
+- [x] Shell completions (bash, zsh, fish)
+- [x] `--dry-run` mode (validate config without running)
 - [ ] Man page generation
 - [ ] Improved error messages with suggestions
-- [ ] `--dry-run` mode (validate config without running)
 - [ ] Statistical significance in compare (multi-run baselines)
 
 ---

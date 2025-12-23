@@ -1,4 +1,5 @@
-use clap::{Parser, Subcommand};
+use clap::{CommandFactory, Parser, Subcommand};
+use clap_complete::Shell;
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -28,6 +29,12 @@ pub enum Commands {
 
     /// Compare two load test results for regressions
     Compare(CompareArgs),
+
+    /// Generate a starter config file
+    Init(InitArgs),
+
+    /// Generate shell completions
+    Completions(CompletionsArgs),
 }
 
 impl Default for Commands {
@@ -129,6 +136,10 @@ pub struct RunArgs {
     /// Skip confirmation for remote targets
     #[arg(short = 'y', long)]
     pub yes: bool,
+
+    /// Validate config and exit without running
+    #[arg(long)]
+    pub dry_run: bool,
 }
 
 #[derive(Parser, Debug)]
@@ -177,4 +188,31 @@ impl RunArgs {
             })
             .collect()
     }
+}
+
+#[derive(Parser, Debug)]
+pub struct InitArgs {
+    /// Output file path (default: kaioken.toml)
+    #[arg(short, long, default_value = "kaioken.toml")]
+    pub output: PathBuf,
+
+    /// Target URL to include in config
+    #[arg(short, long)]
+    pub url: Option<String>,
+
+    /// Overwrite existing file
+    #[arg(long)]
+    pub force: bool,
+}
+
+#[derive(Parser, Debug)]
+pub struct CompletionsArgs {
+    /// Shell to generate completions for
+    #[arg(value_enum)]
+    pub shell: Shell,
+}
+
+pub fn generate_completions(shell: Shell) {
+    let mut cmd = Cli::command();
+    clap_complete::generate(shell, &mut cmd, "kaioken", &mut std::io::stdout());
 }

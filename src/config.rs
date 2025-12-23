@@ -1,5 +1,5 @@
 use crate::cli::RunArgs;
-use crate::types::LoadConfig;
+use crate::types::{LoadConfig, Scenario};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::fs;
@@ -12,6 +12,30 @@ pub struct TomlConfig {
     pub target: TargetConfig,
     #[serde(default)]
     pub load: LoadSettings,
+    #[serde(default)]
+    pub scenarios: Vec<ScenarioConfig>,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct ScenarioConfig {
+    pub name: Option<String>,
+    pub url: String,
+    #[serde(default = "default_method")]
+    pub method: String,
+    #[serde(default)]
+    pub headers: HashMap<String, String>,
+    pub body: Option<String>,
+    pub body_file: Option<String>,
+    #[serde(default = "default_weight")]
+    pub weight: u32,
+}
+
+fn default_method() -> String {
+    "GET".to_string()
+}
+
+fn default_weight() -> u32 {
+    1
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -174,11 +198,15 @@ pub fn merge_config(args: &RunArgs, toml: Option<TomlConfig>) -> Result<LoadConf
     let insecure = args.insecure || toml.target.insecure;
     let http2 = args.http2 || toml.target.http2;
 
+    // Process scenarios
+    let scenarios = process_scenarios(&toml.scenarios)?;
+
     Ok(LoadConfig {
         url,
         method,
         headers,
         body,
+        scenarios,
         concurrency,
         duration,
         max_requests,
@@ -190,4 +218,48 @@ pub fn merge_config(args: &RunArgs, toml: Option<TomlConfig>) -> Result<LoadConf
         insecure,
         http2,
     })
+}
+
+fn process_scenarios(configs: &[ScenarioConfig]) -> Result<Vec<Scenario>, String> {
+    let mut scenarios = Vec::with_capacity(configs.len());
+
+    for (i, cfg) in configs.iter().enumerate() {
+        let name = cfg
+            .name
+            .clone()
+            .unwrap_or_else(|| format!("scenario_{}", i + 1));
+
+        let method: reqwest::Method = cfg
+            .method
+            .to_uppercase()
+            .parse()
+            .map_err(|_| format!("Invalid HTTP method in scenario '{}': {}", name, cfg.method))?;
+
+        let headers: Vec<(String, String)> = cfg
+            .headers
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect();
+
+        // Load body from file if specified
+        let body = if let Some(ref path) = cfg.body_file {
+            Some(
+                fs::read_to_string(path)
+                    .map_err(|e| format!("Failed to read body file for '{}': {}", name, e))?,
+            )
+        } else {
+            cfg.body.clone()
+        };
+
+        scenarios.push(Scenario {
+            name,
+            url: cfg.url.clone(),
+            method,
+            headers,
+            body,
+            weight: cfg.weight,
+        });
+    }
+
+    Ok(scenarios)
 }

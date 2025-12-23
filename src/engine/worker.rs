@@ -1,6 +1,6 @@
 use crate::engine::scheduler::RateLimiter;
 use crate::http::execute_request;
-use crate::types::RequestResult;
+use crate::types::{RequestResult, Scenario};
 use reqwest::{Client, Method};
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -14,6 +14,8 @@ pub struct Worker {
     method: Method,
     headers: Vec<(String, String)>,
     body: Option<String>,
+    scenarios: Arc<Vec<Scenario>>,
+    total_weight: u32,
     result_tx: mpsc::Sender<RequestResult>,
     cancel_token: CancellationToken,
     rate_limiter: Option<Arc<RateLimiter>>,
@@ -29,11 +31,14 @@ impl Worker {
         method: Method,
         headers: Vec<(String, String)>,
         body: Option<String>,
+        scenarios: Arc<Vec<Scenario>>,
         result_tx: mpsc::Sender<RequestResult>,
         cancel_token: CancellationToken,
         rate_limiter: Option<Arc<RateLimiter>>,
         ramp_permits: Arc<Semaphore>,
     ) -> Self {
+        let total_weight: u32 = scenarios.iter().map(|s| s.weight).sum();
+
         Self {
             id,
             client,
@@ -41,6 +46,8 @@ impl Worker {
             method,
             headers,
             body,
+            scenarios,
+            total_weight,
             result_tx,
             cancel_token,
             rate_limiter,
@@ -55,6 +62,7 @@ impl Worker {
 
         let mut request_counter: u64 = 0;
         let base_request_id = (self.id as u64) * 1_000_000_000;
+        let use_scenarios = !self.scenarios.is_empty();
 
         loop {
             if self.cancel_token.is_cancelled() {
@@ -80,26 +88,36 @@ impl Worker {
                 .map(|d| d.as_millis())
                 .unwrap_or(0);
 
-            // Interpolate variables
-            let url = interpolate_vars(&self.url, request_id, timestamp_ms);
-            let headers: Vec<(String, String)> = self
-                .headers
-                .iter()
-                .map(|(k, v)| (k.clone(), interpolate_vars(v, request_id, timestamp_ms)))
-                .collect();
-            let body = self
-                .body
-                .as_ref()
-                .map(|b| interpolate_vars(b, request_id, timestamp_ms));
+            // Select scenario or use default target
+            let (url, method, headers, body) = if use_scenarios {
+                let scenario = self.select_scenario(request_counter);
+                let url = interpolate_vars(&scenario.url, request_id, timestamp_ms);
+                let headers: Vec<(String, String)> = scenario
+                    .headers
+                    .iter()
+                    .map(|(k, v)| (k.clone(), interpolate_vars(v, request_id, timestamp_ms)))
+                    .collect();
+                let body = scenario
+                    .body
+                    .as_ref()
+                    .map(|b| interpolate_vars(b, request_id, timestamp_ms));
+                (url, scenario.method.clone(), headers, body)
+            } else {
+                let url = interpolate_vars(&self.url, request_id, timestamp_ms);
+                let headers: Vec<(String, String)> = self
+                    .headers
+                    .iter()
+                    .map(|(k, v)| (k.clone(), interpolate_vars(v, request_id, timestamp_ms)))
+                    .collect();
+                let body = self
+                    .body
+                    .as_ref()
+                    .map(|b| interpolate_vars(b, request_id, timestamp_ms));
+                (url, self.method.clone(), headers, body)
+            };
 
-            let result = execute_request(
-                &self.client,
-                &url,
-                &self.method,
-                &headers,
-                body.as_deref(),
-            )
-            .await;
+            let result = execute_request(&self.client, &url, &method, &headers, body.as_deref())
+                .await;
 
             if self.result_tx.send(result).await.is_err() {
                 break;
@@ -107,6 +125,26 @@ impl Worker {
         }
 
         tracing::debug!("Worker {} stopped", self.id);
+    }
+
+    fn select_scenario(&self, counter: u64) -> &Scenario {
+        if self.scenarios.len() == 1 {
+            return &self.scenarios[0];
+        }
+
+        // Simple weighted selection using counter as seed for deterministic distribution
+        let roll = (counter % self.total_weight as u64) as u32;
+        let mut cumulative = 0u32;
+
+        for scenario in self.scenarios.iter() {
+            cumulative += scenario.weight;
+            if roll < cumulative {
+                return scenario;
+            }
+        }
+
+        // Fallback (shouldn't happen)
+        &self.scenarios[0]
     }
 }
 

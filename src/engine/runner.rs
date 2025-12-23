@@ -4,6 +4,7 @@ use crate::engine::worker::Worker;
 use crate::engine::Stats;
 use crate::http::create_client;
 use crate::types::{LoadConfig, RequestResult, RunPhase, RunState, StatsSnapshot};
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::{mpsc, watch};
 use tokio::time::sleep;
@@ -99,6 +100,7 @@ impl Engine {
 
         // Spawn workers
         let mut worker_handles = Vec::with_capacity(self.config.concurrency as usize);
+        let scenarios = Arc::new(self.config.scenarios.clone());
 
         for id in 0..self.config.concurrency {
             let worker = Worker::new(
@@ -108,6 +110,7 @@ impl Engine {
                 self.config.method.clone(),
                 self.config.headers.clone(),
                 self.config.body.clone(),
+                scenarios.clone(),
                 result_tx.clone(),
                 self.cancel_token.clone(),
                 rate_limiter.clone(),

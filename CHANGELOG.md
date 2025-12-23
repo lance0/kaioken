@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2025-12-23
+
+### Added
+
+- `kaioken init` subcommand to generate starter config file
+- `kaioken completions <shell>` for bash/zsh/fish shell completions
+- `--dry-run` flag to validate config without running
+- Weighted scenarios support via `[[scenarios]]` in TOML config:
+  - Define multiple endpoints with different methods, headers, body
+  - Set weight for traffic distribution (e.g., 70% reads, 30% writes)
+  - Variable interpolation works in all scenario fields
+
+### Changed
+
+- Init command generates config with scenario examples
+
 ## [0.4.0] - 2025-12-23
 
 ### Added
