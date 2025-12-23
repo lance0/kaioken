@@ -1,5 +1,5 @@
 mod csv;
-mod json;
+pub mod json;
 mod markdown;
 
 pub use csv::{print_csv, write_csv};

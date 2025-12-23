@@ -1,4 +1,4 @@
-use crate::cli::Cli;
+use crate::cli::RunArgs;
 use crate::types::LoadConfig;
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -79,17 +79,17 @@ fn interpolate_env_vars(content: &str) -> Result<String, String> {
     Ok(result)
 }
 
-pub fn merge_config(cli: &Cli, toml: Option<TomlConfig>) -> Result<LoadConfig, String> {
+pub fn merge_config(args: &RunArgs, toml: Option<TomlConfig>) -> Result<LoadConfig, String> {
     let toml = toml.unwrap_or_default();
 
-    let url = cli
+    let url = args
         .url
         .clone()
         .or(toml.target.url)
         .ok_or("URL is required. Provide via argument or config file.")?;
 
-    let method_str = if cli.method != "GET" {
-        cli.method.clone()
+    let method_str = if args.method != "GET" {
+        args.method.clone()
     } else {
         toml.target.method.unwrap_or_else(|| "GET".to_string())
     };
@@ -99,58 +99,58 @@ pub fn merge_config(cli: &Cli, toml: Option<TomlConfig>) -> Result<LoadConfig, S
         .parse()
         .map_err(|_| format!("Invalid HTTP method: {}", method_str))?;
 
-    let mut headers = cli.parse_headers()?;
+    let mut headers = args.parse_headers()?;
     for (k, v) in toml.target.headers {
         if !headers.iter().any(|(hk, _)| hk.eq_ignore_ascii_case(&k)) {
             headers.push((k, v));
         }
     }
 
-    let body = cli.body.clone().or(toml.target.body);
+    let body = args.body.clone().or(toml.target.body);
 
-    let concurrency = if cli.concurrency != 50 {
-        cli.concurrency
+    let concurrency = if args.concurrency != 50 {
+        args.concurrency
     } else {
         toml.load.concurrency.unwrap_or(50)
     };
 
-    let duration = if cli.duration != Duration::from_secs(10) {
-        cli.duration
+    let duration = if args.duration != Duration::from_secs(10) {
+        args.duration
     } else {
         toml.load.duration.unwrap_or(Duration::from_secs(10))
     };
 
-    let rate = if cli.rate != 0 {
-        cli.rate
+    let rate = if args.rate != 0 {
+        args.rate
     } else {
         toml.load.rate.unwrap_or(0)
     };
 
-    let ramp_up = if cli.ramp_up != Duration::ZERO {
-        cli.ramp_up
+    let ramp_up = if args.ramp_up != Duration::ZERO {
+        args.ramp_up
     } else {
         toml.load.ramp_up.unwrap_or(Duration::ZERO)
     };
 
-    let warmup = if cli.warmup != Duration::ZERO {
-        cli.warmup
+    let warmup = if args.warmup != Duration::ZERO {
+        args.warmup
     } else {
         toml.load.warmup.unwrap_or(Duration::ZERO)
     };
 
-    let timeout = if cli.timeout != Duration::from_secs(5) {
-        cli.timeout
+    let timeout = if args.timeout != Duration::from_secs(5) {
+        args.timeout
     } else {
         toml.target.timeout.unwrap_or(Duration::from_secs(5))
     };
 
-    let connect_timeout = if cli.connect_timeout != Duration::from_secs(2) {
-        cli.connect_timeout
+    let connect_timeout = if args.connect_timeout != Duration::from_secs(2) {
+        args.connect_timeout
     } else {
         toml.target.connect_timeout.unwrap_or(Duration::from_secs(2))
     };
 
-    let insecure = cli.insecure || toml.target.insecure;
+    let insecure = args.insecure || toml.target.insecure;
 
     Ok(LoadConfig {
         url,

@@ -1,4 +1,5 @@
 mod cli;
+mod compare;
 mod config;
 mod engine;
 mod http;
@@ -7,7 +8,8 @@ mod tui;
 mod types;
 
 use clap::Parser;
-use cli::Cli;
+use cli::{Cli, Commands, RunArgs};
+use compare::{compare_results, print_comparison};
 use config::{load_config, merge_config};
 use engine::Engine;
 use output::{print_csv, print_json, print_markdown, write_csv, write_json, write_markdown};
@@ -23,27 +25,55 @@ async fn main() {
         )
         .init();
 
-    if let Err(e) = run().await {
-        eprintln!("Error: {}", e);
-        std::process::exit(1);
+    let exit_code = match run().await {
+        Ok(code) => code,
+        Err(e) => {
+            eprintln!("Error: {}", e);
+            1
+        }
+    };
+
+    std::process::exit(exit_code);
+}
+
+async fn run() -> Result<i32, String> {
+    let cli = Cli::parse();
+
+    match cli.command {
+        Commands::Run(args) => run_load_test(&args).await,
+        Commands::Compare(args) => run_compare(&args),
     }
 }
 
-async fn run() -> Result<(), String> {
-    let cli = Cli::parse();
+fn run_compare(args: &cli::CompareArgs) -> Result<i32, String> {
+    let result = compare_results(args)?;
 
+    if args.json {
+        compare::display::print_comparison_json(&result)?;
+    } else {
+        print_comparison(&result, args.serious);
+    }
+
+    if result.has_regressions {
+        Ok(3) // Exit code 3 for regressions
+    } else {
+        Ok(0)
+    }
+}
+
+async fn run_load_test(args: &RunArgs) -> Result<i32, String> {
     // Load TOML config if specified
-    let toml_config = if let Some(ref path) = cli.config {
+    let toml_config = if let Some(ref path) = args.config {
         Some(load_config(path)?)
     } else {
         None
     };
 
     // Merge CLI args with config file
-    let config = merge_config(&cli, toml_config)?;
+    let config = merge_config(args, toml_config)?;
 
     // Safety warning for remote targets
-    if !cli.yes && !is_localhost(&config.url) && !cli.quiet && !cli.no_tui && !cli.json {
+    if !args.yes && !is_localhost(&config.url) && !args.quiet && !args.no_tui && !args.json {
         eprintln!(
             "\n⚠️  WARNING: Target is remote ({})",
             extract_host(&config.url).unwrap_or(&config.url)
@@ -64,9 +94,9 @@ async fn run() -> Result<(), String> {
     let state_rx = engine.state_rx();
     let phase_rx = engine.phase_rx();
 
-    let use_tui = !cli.no_tui && !cli.json;
-    let output_json = cli.json;
-    let format = cli.format.to_lowercase();
+    let use_tui = !args.no_tui && !args.json;
+    let output_json = args.json;
+    let format = args.format.to_lowercase();
 
     let tui_handle = if use_tui {
         let app = App::new(
@@ -75,8 +105,8 @@ async fn run() -> Result<(), String> {
             state_rx.clone(),
             phase_rx,
             cancel_token.clone(),
-            cli.serious,
-            cli.output.clone(),
+            args.serious,
+            args.output.clone(),
         );
 
         Some(tokio::spawn(async move { app.run().await }))
@@ -110,12 +140,12 @@ async fn run() -> Result<(), String> {
                 .map_err(|e| format!("Failed to write Markdown: {}", e))?,
             "json" => print_json(&final_snapshot, &config)
                 .map_err(|e| format!("Failed to write JSON: {}", e))?,
-            _ => print_summary(&final_snapshot, cli.serious),
+            _ => print_summary(&final_snapshot, args.serious),
         }
     }
 
     // Write to file if specified
-    if let Some(path) = &cli.output {
+    if let Some(path) = &args.output {
         let write_result = match format.as_str() {
             "csv" => write_csv(&final_snapshot, &config, path),
             "md" | "markdown" => write_markdown(&final_snapshot, &config, path),
@@ -123,16 +153,16 @@ async fn run() -> Result<(), String> {
         };
         write_result.map_err(|e| format!("Failed to write output file: {}", e))?;
 
-        if !cli.quiet && !use_tui {
+        if !args.quiet && !use_tui {
             eprintln!("Results written to: {}", path);
         }
     }
 
     if stats.failed > 0 && stats.error_rate() > 0.5 {
-        std::process::exit(1);
+        Ok(1)
+    } else {
+        Ok(0)
     }
-
-    Ok(())
 }
 
 fn is_localhost(url: &str) -> bool {

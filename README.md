@@ -13,6 +13,7 @@ A Rust-based HTTP load testing tool with real-time terminal UI and DBZ flavor.
 - **Warmup** - Prime connections before measuring (`--warmup 5s`)
 - **Config files** - TOML configuration with environment variable interpolation
 - **Multiple outputs** - JSON, CSV, and Markdown formats
+- **Compare mode** - Detect regressions between runs with CI-friendly exit codes
 - **DBZ flavor** - Power levels from Farmer to OVER 9000 (toggleable with `--serious`)
 
 ## Installation
@@ -25,17 +26,20 @@ cargo install kaioken
 
 ```bash
 # Basic test
-kaioken https://api.example.com/health
+kaioken run https://api.example.com/health
 
 # With options
-kaioken https://api.example.com/users \
+kaioken run https://api.example.com/users \
   -c 100 \          # 100 concurrent workers
   -d 30s \          # 30 second duration
   -r 500 \          # 500 requests/sec max
   --warmup 5s       # 5 second warmup
 
 # Headless mode for CI
-kaioken https://api.example.com --no-tui --format json -o results.json
+kaioken run https://api.example.com --no-tui --format json -o results.json
+
+# Compare two runs for regressions
+kaioken compare baseline.json current.json
 ```
 
 ## TUI Preview

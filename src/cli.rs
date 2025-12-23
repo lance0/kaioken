@@ -1,4 +1,4 @@
-use clap::Parser;
+use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -16,6 +16,28 @@ fn parse_duration(s: &str) -> Result<Duration, humantime::DurationError> {
                   Power up your API testing - DBZ style!"
 )]
 pub struct Cli {
+    #[command(subcommand)]
+    pub command: Commands,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum Commands {
+    /// Run a load test (default if no subcommand specified)
+    #[command(name = "run")]
+    Run(RunArgs),
+
+    /// Compare two load test results for regressions
+    Compare(CompareArgs),
+}
+
+impl Default for Commands {
+    fn default() -> Self {
+        Commands::Run(RunArgs::default())
+    }
+}
+
+#[derive(Parser, Debug, Default)]
+pub struct RunArgs {
     /// Target URL to load test
     #[arg(required_unless_present = "config")]
     pub url: Option<String>,
@@ -97,7 +119,40 @@ pub struct Cli {
     pub yes: bool,
 }
 
-impl Cli {
+#[derive(Parser, Debug)]
+pub struct CompareArgs {
+    /// Baseline results file (JSON)
+    pub baseline: PathBuf,
+
+    /// Current results file (JSON) to compare against baseline
+    pub current: PathBuf,
+
+    /// p99 latency regression threshold (percentage, default: 10)
+    #[arg(long, default_value = "10.0")]
+    pub threshold_p99: f64,
+
+    /// p999 latency regression threshold (percentage, default: 15)
+    #[arg(long, default_value = "15.0")]
+    pub threshold_p999: f64,
+
+    /// Error rate regression threshold (percentage, default: 50)
+    #[arg(long, default_value = "50.0")]
+    pub threshold_error_rate: f64,
+
+    /// RPS regression threshold (percentage, default: 10)
+    #[arg(long, default_value = "10.0")]
+    pub threshold_rps: f64,
+
+    /// Disable DBZ flavor (serious mode)
+    #[arg(long)]
+    pub serious: bool,
+
+    /// Output as JSON instead of table
+    #[arg(long)]
+    pub json: bool,
+}
+
+impl RunArgs {
     pub fn parse_headers(&self) -> Result<Vec<(String, String)>, String> {
         self.headers
             .iter()

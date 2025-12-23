@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2025-12-23
+
+### Added
+
+- `kaioken compare <baseline.json> <current.json>` subcommand for regression detection
+- Side-by-side comparison table with delta percentages
+- Configurable regression thresholds (`--threshold-p99`, `--threshold-rps`, etc.)
+- Exit code 3 when regressions detected (for CI gating)
+- Config compatibility warnings (URL, method, concurrency differences)
+- JSON output for compare results (`--json`)
+- DBZ-flavored comparison output ("FUSION", "POWER", "DRAIN")
+
+### Changed
+
+- CLI restructured to use subcommands: `kaioken run <URL>` and `kaioken compare`
+- **Breaking**: URL is now passed to `run` subcommand (e.g., `kaioken run https://...`)
+
+## [0.2.1] - 2025-12-23
+
+### Added
+
+- README.md with full documentation
+- Dual MIT/Apache-2.0 license
+
 ## [0.2.0] - 2025-12-23
 
 ### Added

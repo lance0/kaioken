@@ -1,11 +1,11 @@
 use crate::types::{LoadConfig, StatsSnapshot};
 use chrono::{DateTime, Utc};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{self, BufWriter};
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct JsonOutput {
     pub metadata: Metadata,
     pub summary: Summary,
@@ -15,7 +15,7 @@ pub struct JsonOutput {
     pub timeline: Vec<TimelineEntry>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct Metadata {
     pub tool: String,
     pub version: String,
@@ -27,14 +27,15 @@ pub struct Metadata {
     pub env: Environment,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct Target {
     pub url: String,
     pub method: String,
     pub headers: Vec<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, Default)]
+#[serde(default)]
 pub struct Load {
     pub concurrency: u32,
     pub rate: u32,
@@ -43,14 +44,14 @@ pub struct Load {
     pub timeout_ms: u64,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct Environment {
     pub hostname: String,
     pub os: String,
     pub cpus: usize,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct Summary {
     pub total_requests: u64,
     pub successful: u64,
@@ -60,7 +61,7 @@ pub struct Summary {
     pub bytes_received: u64,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct Latency {
     pub min: u64,
     pub max: u64,
@@ -74,7 +75,7 @@ pub struct Latency {
     pub p999: u64,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct TimelineEntry {
     pub elapsed_secs: u32,
     pub requests: u64,

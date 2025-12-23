@@ -32,13 +32,13 @@ Fast local load testing against HTTP endpoints with zero setup friction, real-ti
 - [x] Markdown output format (`--format md`)
 - [x] Environment variable interpolation in config (`${VAR}`)
 
-### v0.3 — Compare Mode
+### v0.3 — Compare Mode ✓
 
-- [ ] `kaioken compare <baseline.json> <current.json>` subcommand
-- [ ] Side-by-side diff table (RPS, latency percentiles, error rate)
-- [ ] Regression detection with configurable thresholds
-- [ ] Exit code 3 on regression (for CI gating)
-- [ ] Config compatibility warnings
+- [x] `kaioken compare <baseline.json> <current.json>` subcommand
+- [x] Side-by-side diff table (RPS, latency percentiles, error rate)
+- [x] Regression detection with configurable thresholds
+- [x] Exit code 3 on regression (for CI gating)
+- [x] Config compatibility warnings
 
 ### v0.4 — Advanced Features
 
