@@ -39,6 +39,7 @@ fn get_metric_value(metric: &ThresholdMetric, snapshot: &StatsSnapshot) -> f64 {
         ThresholdMetric::MaxLatencyMs => snapshot.latency_max_us as f64 / 1000.0,
         ThresholdMetric::ErrorRate => snapshot.error_rate,
         ThresholdMetric::Rps => snapshot.requests_per_sec,
+        ThresholdMetric::CheckPassRate => snapshot.overall_check_pass_rate.unwrap_or(1.0),
     }
 }
 
@@ -78,7 +79,7 @@ pub fn print_threshold_results(results: &[ThresholdResult]) {
 fn format_metric_value(metric: &str, value: f64) -> String {
     if metric.contains("latency") {
         format!("{:.2}ms", value)
-    } else if metric == "error_rate" {
+    } else if metric == "error_rate" || metric == "check_pass_rate" {
         format!("{:.4}", value)
     } else if metric == "rps" {
         format!("{:.2}", value)

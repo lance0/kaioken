@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] - 2025-12-24
+
+### Added
+
+- **Check pass rate metric** - Track percentage of requests passing checks:
+  ```toml
+  [thresholds]
+  check_pass_rate = "> 0.95"  # Fail if less than 95% pass
+  ```
+- **Checks in JSON output** - Per-check and overall pass rates included in results:
+  ```json
+  "checks": {
+    "overall_pass_rate": 0.98,
+    "results": {
+      "status_ok": { "passed": 980, "total": 1000, "pass_rate": 0.98 }
+    }
+  }
+  ```
+- **Tags** - Label scenarios for filtering and organization:
+  ```toml
+  [[scenarios]]
+  name = "get_users"
+  url = "https://api.example.com/users"
+  tags = { endpoint = "users", version = "v2" }
+  ```
+- Tags included in JSON output `scenarios` section
+- **Cookie jar** - Automatic session handling with `--cookie-jar` flag or config:
+  ```toml
+  [target]
+  cookie_jar = true
+  ```
+- Cookies persist across requests within each worker
+
 ## [0.8.0] - 2025-12-23
 
 ### Added

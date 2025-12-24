@@ -66,6 +66,7 @@ pub enum ThresholdMetric {
     MaxLatencyMs,
     ErrorRate,
     Rps,
+    CheckPassRate,
 }
 
 impl ThresholdMetric {
@@ -81,6 +82,7 @@ impl ThresholdMetric {
             ThresholdMetric::MaxLatencyMs => "max_latency_ms",
             ThresholdMetric::ErrorRate => "error_rate",
             ThresholdMetric::Rps => "rps",
+            ThresholdMetric::CheckPassRate => "check_pass_rate",
         }
     }
 }
@@ -267,6 +269,7 @@ pub struct StatsSnapshot {
     pub timeline: Vec<TimelineBucket>,
 
     pub check_stats: HashMap<String, CheckStats>,
+    pub overall_check_pass_rate: Option<f64>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -328,6 +331,7 @@ pub struct Scenario {
     pub weight: u32,
     pub extractions: Vec<Extraction>,
     pub depends_on: Option<String>,
+    pub tags: HashMap<String, String>,
 }
 
 #[derive(Debug, Clone)]
@@ -347,6 +351,7 @@ pub struct LoadConfig {
     pub connect_timeout: Duration,
     pub insecure: bool,
     pub http2: bool,
+    pub cookie_jar: bool,
     pub thresholds: Vec<Threshold>,
     pub checks: Vec<Check>,
     pub stages: Vec<Stage>,
@@ -374,6 +379,7 @@ impl Default for LoadConfig {
             connect_timeout: Duration::from_secs(2),
             insecure: false,
             http2: false,
+            cookie_jar: false,
             thresholds: Vec::new(),
             checks: Vec::new(),
             stages: Vec::new(),

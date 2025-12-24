@@ -108,6 +108,10 @@ pub struct RunArgs {
     #[arg(long)]
     pub http2: bool,
 
+    /// Enable cookie jar for automatic session handling
+    #[arg(long)]
+    pub cookie_jar: bool,
+
     /// Config file path (TOML)
     #[arg(short = 'f', long = "config")]
     pub config: Option<PathBuf>,

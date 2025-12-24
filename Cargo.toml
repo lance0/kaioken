@@ -1,6 +1,6 @@
 [package]
 name = "kaioken"
-version = "0.8.0"
+version = "0.9.0"
 edition = "2024"
 description = "A Rust-based HTTP load testing tool with real-time terminal UI and DBZ flavor"
 license = "MIT OR Apache-2.0"
@@ -10,7 +10,7 @@ categories = ["command-line-utilities", "development-tools::profiling"]
 
 [dependencies]
 tokio = { version = "1", features = ["full"] }
-reqwest = { version = "0.12", features = ["gzip", "brotli", "rustls-tls"] }
+reqwest = { version = "0.12", features = ["gzip", "brotli", "rustls-tls", "cookies"] }
 clap = { version = "4", features = ["derive"] }
 clap_complete = "4"
 clap_mangen = "0.2"

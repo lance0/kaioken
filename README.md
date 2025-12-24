@@ -8,11 +8,12 @@ A Rust-based HTTP load testing tool with real-time terminal UI and DBZ flavor.
 ## Features
 
 - **Real-time TUI** - Live metrics with latency percentiles, RPS, status codes
-- **Thresholds** - CI/CD pass/fail criteria (p95 < 500ms, error_rate < 0.01)
-- **Checks** - Response validation (status codes, body content, regex)
+- **Thresholds** - CI/CD pass/fail criteria (p95 < 500ms, error_rate < 0.01, check_pass_rate > 0.95)
+- **Checks** - Response validation (status codes, body content, regex) with pass rate tracking
 - **Request chaining** - Extract values from responses for subsequent requests
 - **Stages** - Multi-phase load profiles (ramp up → hold → ramp down)
-- **Weighted scenarios** - Multi-endpoint testing with traffic distribution
+- **Weighted scenarios** - Multi-endpoint testing with traffic distribution and tags
+- **Cookie jar** - Automatic session handling across requests
 - **Rate limiting** - Token bucket algorithm for controlled load
 - **Ramp-up & warmup** - Gradual worker activation and connection priming
 - **Compare mode** - Regression detection with CI-friendly exit codes
@@ -36,6 +37,7 @@ A Rust-based HTTP load testing tool with real-time terminal UI and DBZ flavor.
 | **Checks/thresholds** | ✅ | ✅ | ❌ | ❌ | ✅ |
 | **Stages** | ✅ | ✅ | ❌ | ❌ | ✅ |
 | **Request chaining** | ✅ | ✅ | ❌ | ❌ | ✅ |
+| **Cookie jar** | ✅ | ✅ | ❌ | ❌ | ✅ |
 | **Language** | Rust | Go | Go | C | Scala |
 
 **kaioken strengths:** Real-time visibility, instant feedback, regression detection, CI/CD thresholds, load stages, request chaining, memorable UX
@@ -101,6 +103,7 @@ kaioken run [OPTIONS] [URL]
 | `-b, --body` | — | Request body |
 | `--body-file` | — | Load body from file |
 | `--http2` | false | Use HTTP/2 prior knowledge |
+| `--cookie-jar` | false | Enable cookie jar for session handling |
 | `-f, --config` | — | TOML config file |
 | `-o, --output` | — | Output file path |
 | `--format` | json | Output format: json, csv, md, html |
@@ -169,6 +172,7 @@ timeout = "5s"
 connect_timeout = "2s"
 # http2 = false
 # insecure = false
+# cookie_jar = false  # Enable for session handling
 
 [target.headers]
 Authorization = "Bearer ${API_TOKEN}"
@@ -199,6 +203,7 @@ p95_latency_ms = "< 500"
 p99_latency_ms = "< 1000"
 error_rate = "< 0.01"
 rps = "> 100"
+check_pass_rate = "> 0.95"  # 95% of checks must pass
 ```
 
 Available metrics:
@@ -206,6 +211,7 @@ Available metrics:
 - `mean_latency_ms`, `max_latency_ms`
 - `error_rate` (0.0 - 1.0)
 - `rps` (requests per second)
+- `check_pass_rate` (0.0 - 1.0) - percentage of checks passing
 
 Operators: `<`, `<=`, `>`, `>=`, `==`
 
@@ -312,6 +318,7 @@ name = "list_users"
 url = "https://api.example.com/users"
 method = "GET"
 weight = 7  # 70% of traffic
+tags = { endpoint = "users", version = "v2" }
 
 [[scenarios]]
 name = "create_user"
@@ -319,6 +326,7 @@ url = "https://api.example.com/users"
 method = "POST"
 body = '{"name": "test-${REQUEST_ID}"}'
 weight = 2  # 20% of traffic
+tags = { endpoint = "users", operation = "write" }
 
 [[scenarios]]
 name = "health_check"
@@ -326,6 +334,8 @@ url = "https://api.example.com/health"
 method = "GET"
 weight = 1  # 10% of traffic
 ```
+
+Tags are optional metadata for organizing and filtering scenarios in output.
 
 Validate with `--dry-run`:
 ```

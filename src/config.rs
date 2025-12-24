@@ -41,6 +41,7 @@ pub struct ThresholdsConfig {
     pub max_latency_ms: Option<String>,
     pub error_rate: Option<String>,
     pub rps: Option<String>,
+    pub check_pass_rate: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -64,6 +65,8 @@ pub struct ScenarioConfig {
     #[serde(default)]
     pub extract: HashMap<String, String>,
     pub depends_on: Option<String>,
+    #[serde(default)]
+    pub tags: HashMap<String, String>,
 }
 
 fn default_method() -> String {
@@ -90,6 +93,8 @@ pub struct TargetConfig {
     pub insecure: bool,
     #[serde(default)]
     pub http2: bool,
+    #[serde(default)]
+    pub cookie_jar: bool,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -243,6 +248,7 @@ pub fn merge_config(args: &RunArgs, toml: Option<TomlConfig>) -> Result<LoadConf
 
     let insecure = args.insecure || toml.target.insecure;
     let http2 = args.http2 || toml.target.http2;
+    let cookie_jar = args.cookie_jar || toml.target.cookie_jar;
 
     // Process scenarios
     let scenarios = process_scenarios(&toml.scenarios)?;
@@ -278,6 +284,7 @@ pub fn merge_config(args: &RunArgs, toml: Option<TomlConfig>) -> Result<LoadConf
         connect_timeout,
         insecure,
         http2,
+        cookie_jar,
         thresholds,
         checks,
         stages,
@@ -339,6 +346,7 @@ fn process_scenarios(configs: &[ScenarioConfig]) -> Result<Vec<Scenario>, String
             weight: cfg.weight,
             extractions,
             depends_on: cfg.depends_on.clone(),
+            tags: cfg.tags.clone(),
         });
     }
 
@@ -359,6 +367,7 @@ fn parse_thresholds(config: &ThresholdsConfig) -> Result<Vec<Threshold>, String>
         (ThresholdMetric::MaxLatencyMs, &config.max_latency_ms),
         (ThresholdMetric::ErrorRate, &config.error_rate),
         (ThresholdMetric::Rps, &config.rps),
+        (ThresholdMetric::CheckPassRate, &config.check_pass_rate),
     ];
 
     for (metric, value) in entries {

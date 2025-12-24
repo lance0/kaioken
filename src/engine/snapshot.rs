@@ -28,6 +28,7 @@ pub fn create_snapshot(stats: &Stats) -> StatsSnapshot {
         status_codes: stats.status_codes.clone(),
         errors: stats.errors.clone(),
         timeline: stats.timeline.clone(),
-        check_stats: HashMap::new(), // TODO: populate from stats when checks implemented
+        check_stats: HashMap::new(),
+        overall_check_pass_rate: None,
     }
 }

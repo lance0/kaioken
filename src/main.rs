@@ -290,7 +290,18 @@ async fn run_load_test(args: &RunArgs) -> Result<i32, String> {
         let _ = handle.await;
     }
 
-    let final_snapshot = snapshot_rx.borrow().clone();
+    let mut final_snapshot = snapshot_rx.borrow().clone();
+
+    // Merge check stats into snapshot for threshold evaluation
+    let check_stats = check_stats_ref.lock().unwrap().clone();
+    if !check_stats.is_empty() {
+        let (total_passed, total_checks): (u64, u64) = check_stats
+            .values()
+            .fold((0, 0), |(p, t), (passed, total)| (p + passed, t + total));
+        if total_checks > 0 {
+            final_snapshot.overall_check_pass_rate = Some(total_passed as f64 / total_checks as f64);
+        }
+    }
 
     // Evaluate thresholds
     let threshold_results = evaluate_thresholds(&config.thresholds, &final_snapshot);
@@ -301,9 +312,16 @@ async fn run_load_test(args: &RunArgs) -> Result<i32, String> {
         Some(threshold_results.as_slice())
     };
 
+    // Prepare check_stats option for JSON output
+    let check_stats_opt = if check_stats.is_empty() {
+        None
+    } else {
+        Some(&check_stats)
+    };
+
     // Print output to stdout if in headless mode
     if output_json {
-        print_json(&final_snapshot, &config, threshold_results_opt)
+        print_json(&final_snapshot, &config, threshold_results_opt, check_stats_opt)
             .map_err(|e| format!("Failed to write JSON: {}", e))?;
     } else if !use_tui {
         match format.as_str() {
@@ -313,7 +331,7 @@ async fn run_load_test(args: &RunArgs) -> Result<i32, String> {
                 .map_err(|e| format!("Failed to write Markdown: {}", e))?,
             "html" => print_html(&final_snapshot, &config)
                 .map_err(|e| format!("Failed to write HTML: {}", e))?,
-            "json" => print_json(&final_snapshot, &config, threshold_results_opt)
+            "json" => print_json(&final_snapshot, &config, threshold_results_opt, check_stats_opt)
                 .map_err(|e| format!("Failed to write JSON: {}", e))?,
             _ => print_summary(&final_snapshot, args.serious),
         }
@@ -325,7 +343,7 @@ async fn run_load_test(args: &RunArgs) -> Result<i32, String> {
             "csv" => write_csv(&final_snapshot, &config, path),
             "md" | "markdown" => write_markdown(&final_snapshot, &config, path),
             "html" => write_html(&final_snapshot, &config, path),
-            _ => write_json(&final_snapshot, &config, path, threshold_results_opt),
+            _ => write_json(&final_snapshot, &config, path, threshold_results_opt, check_stats_opt),
         };
         write_result.map_err(|e| format!("Failed to write output file: {}", e))?;
 
@@ -339,8 +357,7 @@ async fn run_load_test(args: &RunArgs) -> Result<i32, String> {
         print_threshold_results(&threshold_results);
     }
 
-    // Print check results
-    let check_stats = check_stats_ref.lock().unwrap().clone();
+    // Print check results (check_stats already obtained above)
     if !check_stats.is_empty() && !use_tui && !output_json && format != "json" {
         print_check_results(&check_stats);
     }

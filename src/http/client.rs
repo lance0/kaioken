@@ -7,6 +7,7 @@ pub fn create_client(
     connect_timeout: Duration,
     insecure: bool,
     http2: bool,
+    cookie_jar: bool,
 ) -> Result<Client, reqwest::Error> {
     let mut builder = Client::builder()
         .pool_max_idle_per_host(concurrency as usize)
@@ -18,7 +19,8 @@ pub fn create_client(
         .gzip(true)
         .brotli(true)
         .user_agent(format!("kaioken/{} (load-testing-tool)", env!("CARGO_PKG_VERSION")))
-        .danger_accept_invalid_certs(insecure);
+        .danger_accept_invalid_certs(insecure)
+        .cookie_store(cookie_jar);
 
     if http2 {
         builder = builder.http2_prior_knowledge();

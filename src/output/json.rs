@@ -15,12 +15,39 @@ pub struct JsonOutput {
     pub timeline: Vec<TimelineEntry>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub thresholds: Option<ThresholdsOutput>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub checks: Option<ChecksOutput>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub scenarios: Option<Vec<ScenarioOutput>>,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct ThresholdsOutput {
     pub passed: bool,
     pub results: Vec<ThresholdResult>,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct ChecksOutput {
+    pub overall_pass_rate: f64,
+    pub results: HashMap<String, CheckResultOutput>,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct CheckResultOutput {
+    pub passed: u64,
+    pub total: u64,
+    pub pass_rate: f64,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct ScenarioOutput {
+    pub name: String,
+    pub url: String,
+    pub method: String,
+    pub weight: u32,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    pub tags: HashMap<String, String>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -111,6 +138,7 @@ pub fn create_output(
     snapshot: &StatsSnapshot,
     config: &LoadConfig,
     threshold_results: Option<&[ThresholdResult]>,
+    check_stats: Option<&HashMap<String, (u64, u64)>>,
 ) -> JsonOutput {
     let now = Utc::now();
     let started_at = now - chrono::Duration::from_std(snapshot.elapsed).unwrap_or_default();
@@ -142,6 +170,40 @@ pub fn create_output(
             errors: b.errors,
         })
         .collect();
+
+    let checks = check_stats.and_then(|stats| {
+        if stats.is_empty() {
+            None
+        } else {
+            let (total_passed, total_checks): (u64, u64) = stats
+                .values()
+                .fold((0, 0), |(p, t), (passed, total)| (p + passed, t + total));
+            let overall_pass_rate = if total_checks > 0 {
+                total_passed as f64 / total_checks as f64
+            } else {
+                1.0
+            };
+            let results: HashMap<String, CheckResultOutput> = stats
+                .iter()
+                .map(|(name, (passed, total))| {
+                    let pass_rate = if *total > 0 {
+                        *passed as f64 / *total as f64
+                    } else {
+                        1.0
+                    };
+                    (name.clone(), CheckResultOutput {
+                        passed: *passed,
+                        total: *total,
+                        pass_rate,
+                    })
+                })
+                .collect();
+            Some(ChecksOutput {
+                overall_pass_rate,
+                results,
+            })
+        }
+    });
 
     JsonOutput {
         metadata: Metadata {
@@ -197,6 +259,24 @@ pub fn create_output(
             passed: results.iter().all(|r| r.passed),
             results: results.to_vec(),
         }),
+        checks,
+        scenarios: if config.scenarios.is_empty() {
+            None
+        } else {
+            Some(
+                config
+                    .scenarios
+                    .iter()
+                    .map(|s| ScenarioOutput {
+                        name: s.name.clone(),
+                        url: s.url.clone(),
+                        method: s.method.to_string(),
+                        weight: s.weight,
+                        tags: s.tags.clone(),
+                    })
+                    .collect(),
+            )
+        },
     }
 }
 
@@ -205,8 +285,9 @@ pub fn write_json(
     config: &LoadConfig,
     path: &str,
     threshold_results: Option<&[ThresholdResult]>,
+    check_stats: Option<&HashMap<String, (u64, u64)>>,
 ) -> io::Result<()> {
-    let output = create_output(snapshot, config, threshold_results);
+    let output = create_output(snapshot, config, threshold_results, check_stats);
     let file = File::create(path)?;
     let writer = BufWriter::new(file);
     serde_json::to_writer_pretty(writer, &output)?;
@@ -217,8 +298,9 @@ pub fn print_json(
     snapshot: &StatsSnapshot,
     config: &LoadConfig,
     threshold_results: Option<&[ThresholdResult]>,
+    check_stats: Option<&HashMap<String, (u64, u64)>>,
 ) -> io::Result<()> {
-    let output = create_output(snapshot, config, threshold_results);
+    let output = create_output(snapshot, config, threshold_results, check_stats);
     let stdout = io::stdout();
     let writer = BufWriter::new(stdout.lock());
     serde_json::to_writer_pretty(writer, &output)?;

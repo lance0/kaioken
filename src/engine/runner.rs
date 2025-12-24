@@ -90,6 +90,7 @@ impl Engine {
             self.config.connect_timeout,
             self.config.insecure,
             self.config.http2,
+            self.config.cookie_jar,
         )
         .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
 

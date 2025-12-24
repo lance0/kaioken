@@ -76,6 +76,14 @@ Fast local load testing against HTTP endpoints with zero setup friction, real-ti
 - [x] Response data extraction (`json:`, `regex:`, `body`)
 - [x] Variable interpolation with extracted values (`${varname}`)
 
+### v0.9 — Tags, Checks & Sessions ✓
+
+- [x] **Check pass rate metric** - Track % of requests passing checks
+- [x] **Check pass rate threshold** - `check_pass_rate = "> 0.95"` for CI/CD
+- [x] **Tags** - Label scenarios for filtering in output
+- [x] **Cookie jar** - Automatic session handling (`--cookie-jar`)
+- [x] **Checks in JSON output** - Per-check and overall pass rates
+
 ---
 
 ## Upcoming Milestones
@@ -84,31 +92,19 @@ Fast local load testing against HTTP endpoints with zero setup friction, real-ti
 
 Items moved from earlier milestones:
 
-- [ ] **Check pass rate metric** - Track % of requests passing checks
 - [ ] **Constant arrival rate** - Fixed RPS regardless of response time
 - [ ] **Ramping arrival rate** - RPS-based stages (not worker-based)
-- [ ] **Cookie jar** - Automatic session handling
 - [ ] **Redirect control** - `follow_redirects = false`
 - [ ] **Request groups** - Logical grouping for metrics
 
-### v0.9 — Observability & Integration
+### v1.0 — Production Ready
 
-Enterprise-grade monitoring and reporting.
+Stability, observability, and ecosystem.
 
-- [ ] **Tags** - Label requests for filtering
-  ```toml
-  [[scenarios]]
-  tags = { endpoint = "users", version = "v2" }
-  ```
 - [ ] **Prometheus metrics endpoint** - Real-time scraping during runs
 - [ ] **InfluxDB export** - Time-series metrics output
 - [ ] **Custom metrics** - User-defined counters/gauges
 - [ ] **Improved error messages** - Suggestions for common mistakes
-
-### v1.0 — Production Ready
-
-Stability, documentation, and ecosystem.
-
 - [ ] **Comprehensive test suite** - Unit, integration, e2e tests
 - [ ] **Performance benchmarks** - kaioken vs wrk/vegeta/k6
 - [ ] **User guide documentation** - Full docs site
