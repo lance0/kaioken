@@ -13,7 +13,7 @@ Fast local load testing against HTTP endpoints with zero setup friction, real-ti
 | **Real-time TUI** | ✅ Unique | ❌ | ❌ | ❌ |
 | **Compare/Regression** | ✅ Unique | ❌ | ❌ | ❌ |
 | **Zero Config** | ✅ | ❌ | ❌ | ❌ |
-| **Constant Arrival Rate** | 🔜 v1.0 | ✅ | ✅ | ✅ |
+| **Constant Arrival Rate** | ✅ | ✅ | ✅ | ✅ |
 | **CI/CD Thresholds** | ✅ | ✅ | ✅ | ❌ |
 | **Request Chaining** | ✅ | ✅ | ✅ | ✅ |
 | **WebSocket** | 🔜 v1.1 | ✅ | ✅ | ❌ |
@@ -102,17 +102,23 @@ Fast local load testing against HTTP endpoints with zero setup friction, real-ti
 
 ## Upcoming Milestones
 
-### v1.0 — Constant Arrival Rate ⭐ (Critical for Competitiveness)
+### v0.9.1 — Constant Arrival Rate ✓
 
-The #1 feature gap vs k6/Gatling. Enables realistic load simulation.
-
-- [ ] **Constant arrival rate executor** - Fixed RPS regardless of response time
+- [x] **Constant arrival rate executor** - Fixed RPS regardless of response time
   ```toml
   [load]
   arrival_rate = 100  # 100 requests/second, VUs scale automatically
   max_vus = 500       # Cap on concurrent VUs
   duration = "5m"
   ```
+- [x] **Dropped iteration tracking** - Metric when VUs can't keep up with rate
+- [x] **Auto VU scaling** - Dynamically spawn/retire VUs to maintain rate
+- [x] CLI flags: `--arrival-rate` and `--max-vus`
+
+### v1.0 — Ramping Arrival Rate ⭐
+
+Complete the arrival rate feature with staged ramping.
+
 - [ ] **Ramping arrival rate** - RPS-based stages (not worker-based)
   ```toml
   [[stages]]
@@ -123,8 +129,8 @@ The #1 feature gap vs k6/Gatling. Enables realistic load simulation.
   duration = "5m"
   target_rate = 500   # Hold at 500 RPS
   ```
-- [ ] **Dropped iteration tracking** - Metric when VUs can't keep up with rate
-- [ ] **Auto VU scaling** - Dynamically spawn/retire VUs to maintain rate
+- [ ] **Gradual rate transitions** - Smooth ramp between target rates
+- [ ] **TUI display** - Show target rate, actual rate, dropped iterations
 
 ### v1.1 — WebSocket Support
 

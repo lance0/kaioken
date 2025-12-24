@@ -8,6 +8,7 @@ A Rust-based HTTP load testing tool with real-time terminal UI and DBZ flavor.
 ## Features
 
 - **Real-time TUI** - Live metrics with latency percentiles, RPS, status codes
+- **Constant arrival rate** - Fixed RPS load generation with automatic VU scaling
 - **Thresholds** - CI/CD pass/fail criteria (p95 < 500ms, error_rate < 0.01, check_pass_rate > 0.95)
 - **Checks** - Response validation (status codes, body content, regex) with pass rate tracking
 - **Request chaining** - Extract values from responses for subsequent requests
@@ -38,6 +39,7 @@ A Rust-based HTTP load testing tool with real-time terminal UI and DBZ flavor.
 | **Stages** | ✅ | ✅ | ❌ | ❌ | ✅ |
 | **Request chaining** | ✅ | ✅ | ❌ | ❌ | ✅ |
 | **Cookie jar** | ✅ | ✅ | ❌ | ❌ | ✅ |
+| **Arrival rate** | ✅ | ✅ | ❌ | ❌ | ✅ |
 | **Language** | Rust | Go | Go | C | Scala |
 
 **kaioken strengths:** Real-time visibility, instant feedback, regression detection, CI/CD thresholds, load stages, request chaining, memorable UX
@@ -98,6 +100,8 @@ kaioken run [OPTIONS] [URL]
 | `--ramp-up` | 0s | Time to reach full concurrency |
 | `--warmup` | 0s | Warmup period (not measured) |
 | `--think-time` | — | Pause between requests (e.g., 500ms) |
+| `--arrival-rate` | 0 | Target RPS (enables arrival rate mode) |
+| `--max-vus` | 100 | Max VUs for arrival rate mode |
 | `-m, --method` | GET | HTTP method |
 | `-H, --header` | — | Header (repeatable) |
 | `-b, --body` | — | Request body |
@@ -189,9 +193,41 @@ duration = "30s"
 # ramp_up = "5s"
 # warmup = "3s"
 # think_time = "500ms"
+
+# Arrival rate mode (alternative to concurrency)
+# arrival_rate = 100  # Fixed 100 RPS
+# max_vus = 200       # Cap on concurrent VUs
 ```
 
 Environment variables: `${VAR}` or `${VAR:-default}`
+
+## Constant Arrival Rate
+
+Generate load at a fixed RPS regardless of response times. VUs scale automatically.
+
+```bash
+# CLI: 100 RPS with up to 50 VUs
+kaioken run --arrival-rate 100 --max-vus 50 -d 1m https://api.example.com
+
+# Config file
+```
+
+```toml
+[load]
+arrival_rate = 100  # Target: 100 requests/second
+max_vus = 200       # Max concurrent VUs (auto-scales)
+duration = "5m"
+```
+
+**How it works:**
+- Iterations spawn at the target rate (e.g., 100/sec = one every 10ms)
+- If responses are slow, more VUs are allocated (up to `max_vus`)
+- If all VUs are busy, iterations are **dropped** and tracked
+- Dropped iterations indicate the system can't sustain the target rate
+
+**vs Rate Limiting (`--rate`):**
+- `--rate` limits an existing pool of workers (caps RPS from above)
+- `--arrival-rate` maintains a constant RPS (spawns work from below)
 
 ## Thresholds
 

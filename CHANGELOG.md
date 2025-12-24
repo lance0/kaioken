@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.1] - 2025-12-24
+
+### Added
+
+- **Constant arrival rate** - Generate load at a fixed RPS regardless of response times:
+  ```bash
+  kaioken run --arrival-rate 100 --max-vus 50 -d 1m https://api.example.com
+  ```
+  ```toml
+  [load]
+  arrival_rate = 100  # 100 requests/second
+  max_vus = 200       # Auto-scale VUs up to this limit
+  duration = "5m"
+  ```
+- **Automatic VU scaling** - VUs spawn on-demand to maintain target rate
+- **Dropped iteration tracking** - Metric for when max VUs can't sustain the rate
+- New CLI flags: `--arrival-rate` and `--max-vus`
+
+### Changed
+
+- Stage `target` field is now optional (prep for ramping arrival rate in v1.0)
+- Config validation prevents mixing VU-based and rate-based stages
+
 ## [0.9.0] - 2025-12-24
 
 ### Added
