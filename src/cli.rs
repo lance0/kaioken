@@ -196,6 +196,10 @@ pub struct CompareArgs {
     /// Output as JSON instead of table
     #[arg(long)]
     pub json: bool,
+
+    /// Force comparison even if load models differ (open vs closed)
+    #[arg(long)]
+    pub force: bool,
 }
 
 impl RunArgs {

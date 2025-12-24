@@ -135,7 +135,14 @@ duration = "30s"
 }
 
 fn run_compare(args: &cli::CompareArgs) -> Result<i32, String> {
-    let result = compare_results(args)?;
+    let result = match compare_results(args) {
+        Ok(r) => r,
+        Err(e) if e.contains("Cannot compare") && e.contains("vs") => {
+            eprintln!("Error: {}", e);
+            return Ok(5); // Exit code 5 for load model mismatch
+        }
+        Err(e) => return Err(e),
+    };
 
     if args.json {
         compare::display::print_comparison_json(&result)?;

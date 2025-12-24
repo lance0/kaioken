@@ -43,6 +43,71 @@ pub fn compare_results(args: &CompareArgs) -> Result<CompareResult, String> {
     let mut regressions = Vec::new();
     let mut warnings = Vec::new();
 
+    // Determine load models
+    let baseline_model = baseline.metadata.load.load_model.as_deref().unwrap_or("closed");
+    let current_model = current.metadata.load.load_model.as_deref().unwrap_or("closed");
+    let baseline_is_open = baseline_model == "open";
+    let current_is_open = current_model == "open";
+
+    // Print load model metadata
+    eprintln!();
+    if baseline_is_open {
+        let rate = baseline.metadata.load.arrival_rate.unwrap_or(0);
+        let max_vus = baseline.metadata.load.max_vus.unwrap_or(0);
+        eprintln!("Baseline:  Open (arrival rate)  target={}  max_vus={}", rate, max_vus);
+    } else {
+        let vus = baseline.metadata.load.concurrency;
+        eprintln!("Baseline:  Closed (VU-driven)   vus={}", vus);
+    }
+    if current_is_open {
+        let rate = current.metadata.load.arrival_rate.unwrap_or(0);
+        let max_vus = current.metadata.load.max_vus.unwrap_or(0);
+        eprintln!("Candidate: Open (arrival rate)  target={}  max_vus={}", rate, max_vus);
+    } else {
+        let vus = current.metadata.load.concurrency;
+        eprintln!("Candidate: Closed (VU-driven)   vus={}", vus);
+    }
+    eprintln!();
+
+    // Fail if load models differ (unless --force)
+    if baseline_is_open != current_is_open {
+        if !args.force {
+            return Err(format!(
+                "Cannot compare {} vs {} runs. Use --force to compare anyway.",
+                if baseline_is_open { "Open" } else { "Closed" },
+                if current_is_open { "Open" } else { "Closed" }
+            ));
+        }
+        warnings.push(format!(
+            "Load models differ: {} vs {} (forced comparison)",
+            if baseline_is_open { "Open" } else { "Closed" },
+            if current_is_open { "Open" } else { "Closed" }
+        ));
+    }
+
+    // Model-specific parameter validation
+    if baseline_is_open && current_is_open {
+        // Both open: check arrival rate parameters
+        let base_rate = baseline.metadata.load.arrival_rate.unwrap_or(0);
+        let curr_rate = current.metadata.load.arrival_rate.unwrap_or(0);
+        if base_rate != curr_rate {
+            warnings.push(format!("Target RPS differs: {} vs {}", base_rate, curr_rate));
+        }
+        let base_max = baseline.metadata.load.max_vus.unwrap_or(0);
+        let curr_max = current.metadata.load.max_vus.unwrap_or(0);
+        if base_max != curr_max {
+            warnings.push(format!("Max VUs differs: {} vs {}", base_max, curr_max));
+        }
+    } else if !baseline_is_open && !current_is_open {
+        // Both closed: check VU parameters
+        if baseline.metadata.load.concurrency != current.metadata.load.concurrency {
+            warnings.push(format!(
+                "Concurrency differs: {} vs {}",
+                baseline.metadata.load.concurrency, current.metadata.load.concurrency
+            ));
+        }
+    }
+
     // Check config compatibility
     if baseline.metadata.target.url != current.metadata.target.url {
         warnings.push(format!(
@@ -54,12 +119,6 @@ pub fn compare_results(args: &CompareArgs) -> Result<CompareResult, String> {
         warnings.push(format!(
             "Method differs: {} vs {}",
             baseline.metadata.target.method, current.metadata.target.method
-        ));
-    }
-    if baseline.metadata.load.concurrency != current.metadata.load.concurrency {
-        warnings.push(format!(
-            "Concurrency differs: {} vs {}",
-            baseline.metadata.load.concurrency, current.metadata.load.concurrency
         ));
     }
 
