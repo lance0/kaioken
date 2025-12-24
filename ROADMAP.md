@@ -6,6 +6,20 @@ A Rust-based HTTP load testing tool with real-time terminal UI and DBZ flavor.
 
 Fast local load testing against HTTP endpoints with zero setup friction, real-time visibility, deterministic artifacts, and a memorable DBZ-themed UX. CI/CD ready with checks and thresholds.
 
+## Competitive Positioning
+
+| Feature | kaioken | k6 | Gatling | Locust |
+|---------|:-------:|:--:|:-------:|:------:|
+| **Real-time TUI** | ✅ Unique | ❌ | ❌ | ❌ |
+| **Compare/Regression** | ✅ Unique | ❌ | ❌ | ❌ |
+| **Zero Config** | ✅ | ❌ | ❌ | ❌ |
+| **Constant Arrival Rate** | 🔜 v1.0 | ✅ | ✅ | ✅ |
+| **CI/CD Thresholds** | ✅ | ✅ | ✅ | ❌ |
+| **Request Chaining** | ✅ | ✅ | ✅ | ✅ |
+| **WebSocket** | 🔜 v1.1 | ✅ | ✅ | ❌ |
+| **gRPC** | 🔜 v1.2 | ✅ | ✅ | ❌ |
+| **Language** | Rust | Go | Scala | Python |
+
 ---
 
 ## Completed Milestones
@@ -88,49 +102,81 @@ Fast local load testing against HTTP endpoints with zero setup friction, real-ti
 
 ## Upcoming Milestones
 
-### Deferred Items
+### v1.0 — Constant Arrival Rate ⭐ (Critical for Competitiveness)
 
-Items moved from earlier milestones:
+The #1 feature gap vs k6/Gatling. Enables realistic load simulation.
 
-- [ ] **Constant arrival rate** - Fixed RPS regardless of response time
+- [ ] **Constant arrival rate executor** - Fixed RPS regardless of response time
+  ```toml
+  [load]
+  arrival_rate = 100  # 100 requests/second, VUs scale automatically
+  max_vus = 500       # Cap on concurrent VUs
+  duration = "5m"
+  ```
 - [ ] **Ramping arrival rate** - RPS-based stages (not worker-based)
-- [ ] **Redirect control** - `follow_redirects = false`
-- [ ] **Request groups** - Logical grouping for metrics
+  ```toml
+  [[stages]]
+  duration = "1m"
+  target_rate = 100   # Ramp to 100 RPS
+  
+  [[stages]]
+  duration = "5m"
+  target_rate = 500   # Hold at 500 RPS
+  ```
+- [ ] **Dropped iteration tracking** - Metric when VUs can't keep up with rate
+- [ ] **Auto VU scaling** - Dynamically spawn/retire VUs to maintain rate
 
-### v1.0 — Production Ready
+### v1.1 — WebSocket Support
 
-Stability, observability, and ecosystem.
+Essential for modern real-time applications.
 
-- [ ] **Prometheus metrics endpoint** - Real-time scraping during runs
-- [ ] **InfluxDB export** - Time-series metrics output
-- [ ] **Custom metrics** - User-defined counters/gauges
-- [ ] **Improved error messages** - Suggestions for common mistakes
+- [ ] **WebSocket connections** - `ws://` and `wss://` protocol support
+- [ ] **Message send/receive** - Bidirectional messaging load tests
+- [ ] **Connection lifecycle** - Open, message, close patterns
+- [ ] **WebSocket checks** - Validate message content
+
+### v1.2 — gRPC Support
+
+Critical for microservices architectures.
+
+- [ ] **gRPC unary calls** - Request/response pattern
+- [ ] **Protobuf support** - Load .proto files or reflection
+- [ ] **gRPC streaming** - Client, server, and bidirectional streams
+- [ ] **gRPC checks** - Status codes, response validation
+
+### v1.3 — Production Polish
+
 - [ ] **Comprehensive test suite** - Unit, integration, e2e tests
 - [ ] **Performance benchmarks** - kaioken vs wrk/vegeta/k6
-- [ ] **User guide documentation** - Full docs site
-- [ ] **Plugin system** - Custom output formats, checks
-- [ ] **Statistical significance** - Multi-run baseline comparison
+- [ ] **Improved error messages** - Suggestions for common mistakes
+- [ ] **Redirect control** - `follow_redirects = false`
 
 ---
 
-## Future Considerations (Post v1.0)
+## Future Considerations (Post v1.x)
+
+**Observability:**
+- Prometheus metrics endpoint — Real-time scraping during runs
+- InfluxDB/OpenTelemetry export — Time-series metrics output
+- Custom metrics — User-defined counters/gauges
 
 **Protocol Support:**
-- WebSocket testing — Connection upgrade and message load
-- gRPC support — Protocol buffer payloads
-- GraphQL — Query-aware load testing
+- GraphQL — Query-aware load testing with introspection
+- MQTT — IoT protocol testing
+- Kafka — Message queue load testing
 
 **Advanced Features:**
 - Distributed mode — Coordinated multi-node load generation
 - Lua/Rhai scripting — Dynamic request generation
 - File uploads — multipart/form-data support
 - Proxy support — HTTP/SOCKS proxy
+- Statistical significance — Multi-run baseline comparison
 
 **Metrics & Analysis:**
 - Keep-alive metrics — Connection reuse tracking
 - DNS re-resolution — For DNS-based load balancing
 - Flame graphs — CPU profiling integration
-- Anomaly detection — AI-powered regression detection
+- AI-powered anomaly detection — Smart regression detection
 
 ---
 
