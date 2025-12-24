@@ -1,13 +1,13 @@
 use crate::output::write_json;
 use crate::tui::theme::ThemeMode;
-use crate::tui::{ui, Flavor, Theme};
+use crate::tui::{Flavor, Theme, ui};
 use crate::types::{LoadConfig, RunPhase, RunState, StatsSnapshot};
 use crossterm::{
     event::{self, Event, KeyCode, KeyEventKind},
     execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
-use ratatui::{backend::CrosstermBackend, Terminal};
+use ratatui::{Terminal, backend::CrosstermBackend};
 use std::io::{self, stdout};
 use std::time::Duration;
 use tokio::sync::watch;
@@ -106,8 +106,8 @@ impl App {
             }
 
             while event::poll(Duration::from_millis(0))? {
-                if let Event::Key(key) = event::read()? {
-                    if key.kind == KeyEventKind::Press {
+                if let Event::Key(key) = event::read()?
+                    && key.kind == KeyEventKind::Press {
                         match key.code {
                             KeyCode::Char('q') | KeyCode::Esc => {
                                 self.cancel_token.cancel();
@@ -124,7 +124,6 @@ impl App {
                             _ => {}
                         }
                     }
-                }
             }
         }
 

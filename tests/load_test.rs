@@ -40,9 +40,7 @@ async fn setup_mock_server() -> MockServer {
 
     Mock::given(method("POST"))
         .and(path("/users"))
-        .respond_with(
-            ResponseTemplate::new(201).set_body_string(r#"{"id":1,"name":"test"}"#),
-        )
+        .respond_with(ResponseTemplate::new(201).set_body_string(r#"{"id":1,"name":"test"}"#))
         .mount(&server)
         .await;
 
@@ -55,16 +53,7 @@ async fn basic_load_test_succeeds() {
     let url = format!("{}/health", server.uri());
 
     kaioken()
-        .args([
-            "run",
-            &url,
-            "-c",
-            "2",
-            "-d",
-            "1s",
-            "--no-tui",
-            "-y",
-        ])
+        .args(["run", &url, "-c", "2", "-d", "1s", "--no-tui", "-y"])
         .assert()
         .success();
 }
@@ -138,7 +127,10 @@ async fn load_test_with_headers() {
 
     Mock::given(method("GET"))
         .and(path("/auth"))
-        .and(wiremock::matchers::header("Authorization", "Bearer test-token"))
+        .and(wiremock::matchers::header(
+            "Authorization",
+            "Bearer test-token",
+        ))
         .respond_with(ResponseTemplate::new(200))
         .mount(&server)
         .await;
@@ -257,16 +249,7 @@ async fn load_test_json_stdout() {
     let url = format!("{}/health", server.uri());
 
     let output = kaioken()
-        .args([
-            "run",
-            &url,
-            "-c",
-            "1",
-            "-d",
-            "1s",
-            "--json",
-            "-y",
-        ])
+        .args(["run", &url, "-c", "1", "-d", "1s", "--json", "-y"])
         .assert()
         .success()
         .get_output()
@@ -314,12 +297,17 @@ async fn load_test_arrival_rate_mode() {
         json["metadata"]["load"]["arrival_rate"].as_u64().unwrap(),
         10
     );
-    assert_eq!(
-        json["metadata"]["load"]["max_vus"].as_u64().unwrap(),
-        5
-    );
+    assert_eq!(json["metadata"]["load"]["max_vus"].as_u64().unwrap(), 5);
 
     // Verify arrival rate summary is present
-    assert!(json["summary"]["arrival_rate"]["target_rps"].as_u64().is_some());
-    assert!(json["summary"]["arrival_rate"]["achieved_rps"].as_f64().is_some());
+    assert!(
+        json["summary"]["arrival_rate"]["target_rps"]
+            .as_u64()
+            .is_some()
+    );
+    assert!(
+        json["summary"]["arrival_rate"]["achieved_rps"]
+            .as_f64()
+            .is_some()
+    );
 }

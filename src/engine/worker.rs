@@ -5,7 +5,7 @@ use reqwest::{Client, Method};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use tokio::sync::{mpsc, Semaphore};
+use tokio::sync::{Semaphore, mpsc};
 use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
 
@@ -80,13 +80,18 @@ impl Worker {
         let mut request_counter: u64 = 0;
         let base_request_id = (self.id as u64) * 1_000_000_000;
         let use_scenarios = !self.scenarios.is_empty();
-        
+
         // Determine if we need to capture body (for checks or extractions)
-        let has_body_checks = self.checks.iter().any(|c| matches!(
-            c.condition,
-            CheckCondition::BodyContains(_) | CheckCondition::BodyNotContains(_) | CheckCondition::BodyMatches(_)
-        ));
-        let has_extractions = use_scenarios && self.scenarios.iter().any(|s| !s.extractions.is_empty());
+        let has_body_checks = self.checks.iter().any(|c| {
+            matches!(
+                c.condition,
+                CheckCondition::BodyContains(_)
+                    | CheckCondition::BodyNotContains(_)
+                    | CheckCondition::BodyMatches(_)
+            )
+        });
+        let has_extractions =
+            use_scenarios && self.scenarios.iter().any(|s| !s.extractions.is_empty());
         let capture_body = has_body_checks || has_extractions;
 
         // Per-worker extracted values storage
@@ -119,23 +124,40 @@ impl Worker {
             // Select scenario or use default target
             let (url, method, headers, body, extractions) = if use_scenarios {
                 let scenario = self.select_scenario(request_counter);
-                let url = interpolate_vars(&scenario.url, request_id, timestamp_ms, &extracted_values);
+                let url =
+                    interpolate_vars(&scenario.url, request_id, timestamp_ms, &extracted_values);
                 let headers: Vec<(String, String)> = scenario
                     .headers
                     .iter()
-                    .map(|(k, v)| (k.clone(), interpolate_vars(v, request_id, timestamp_ms, &extracted_values)))
+                    .map(|(k, v)| {
+                        (
+                            k.clone(),
+                            interpolate_vars(v, request_id, timestamp_ms, &extracted_values),
+                        )
+                    })
                     .collect();
                 let body = scenario
                     .body
                     .as_ref()
                     .map(|b| interpolate_vars(b, request_id, timestamp_ms, &extracted_values));
-                (url, scenario.method.clone(), headers, body, scenario.extractions.clone())
+                (
+                    url,
+                    scenario.method.clone(),
+                    headers,
+                    body,
+                    scenario.extractions.clone(),
+                )
             } else {
                 let url = interpolate_vars(&self.url, request_id, timestamp_ms, &extracted_values);
                 let headers: Vec<(String, String)> = self
                     .headers
                     .iter()
-                    .map(|(k, v)| (k.clone(), interpolate_vars(v, request_id, timestamp_ms, &extracted_values)))
+                    .map(|(k, v)| {
+                        (
+                            k.clone(),
+                            interpolate_vars(v, request_id, timestamp_ms, &extracted_values),
+                        )
+                    })
                     .collect();
                 let body = self
                     .body
@@ -144,8 +166,15 @@ impl Worker {
                 (url, self.method.clone(), headers, body, Vec::new())
             };
 
-            let result = execute_request(&self.client, &url, &method, &headers, body.as_deref(), capture_body)
-                .await;
+            let result = execute_request(
+                &self.client,
+                &url,
+                &method,
+                &headers,
+                body.as_deref(),
+                capture_body,
+            )
+            .await;
 
             // Perform extractions if configured and request succeeded
             if !extractions.is_empty() && result.status.is_some() {
@@ -158,18 +187,19 @@ impl Worker {
             }
 
             // Evaluate checks if configured
-            if !self.checks.is_empty() {
-                if let Some(ref check_tx) = self.check_tx {
+            if !self.checks.is_empty()
+                && let Some(ref check_tx) = self.check_tx {
                     let body_str = result.body.as_deref().unwrap_or("");
                     for check in self.checks.iter() {
                         let passed = check.condition.evaluate(result.status, body_str);
-                        let _ = check_tx.send(CheckResult {
-                            name: check.name.clone(),
-                            passed,
-                        }).await;
+                        let _ = check_tx
+                            .send(CheckResult {
+                                name: check.name.clone(),
+                                passed,
+                            })
+                            .await;
                     }
                 }
-            }
 
             if self.result_tx.send(result).await.is_err() {
                 break;
@@ -208,28 +238,38 @@ impl Worker {
     }
 }
 
-fn interpolate_vars(s: &str, request_id: u64, timestamp_ms: u128, extracted: &HashMap<String, String>) -> String {
-    let mut result = s.replace("${REQUEST_ID}", &request_id.to_string())
+fn interpolate_vars(
+    s: &str,
+    request_id: u64,
+    timestamp_ms: u128,
+    extracted: &HashMap<String, String>,
+) -> String {
+    let mut result = s
+        .replace("${REQUEST_ID}", &request_id.to_string())
         .replace("${TIMESTAMP_MS}", &timestamp_ms.to_string());
-    
+
     // Replace extracted variables
     for (name, value) in extracted {
         let pattern = format!("${{{}}}", name);
         result = result.replace(&pattern, value);
     }
-    
+
     result
 }
 
-fn extract_value(source: &ExtractionSource, body: &str, _headers: &[(String, String)]) -> Option<String> {
+fn extract_value(
+    source: &ExtractionSource,
+    body: &str,
+    _headers: &[(String, String)],
+) -> Option<String> {
     match source {
         ExtractionSource::JsonPath(path) => {
             use jsonpath_rust::JsonPath;
             if let Ok(json) = serde_json::from_str::<serde_json::Value>(body) {
                 // Use the JsonPath trait method on Value
                 let results = json.query(path);
-                if let Ok(values) = results {
-                    if let Some(first) = values.first() {
+                if let Ok(values) = results
+                    && let Some(first) = values.first() {
                         return match first {
                             serde_json::Value::String(s) => Some(s.clone()),
                             serde_json::Value::Number(n) => Some(n.to_string()),
@@ -238,7 +278,6 @@ fn extract_value(source: &ExtractionSource, body: &str, _headers: &[(String, Str
                             other => Some(other.to_string()),
                         };
                     }
-                }
             }
             None
         }
@@ -249,13 +288,11 @@ fn extract_value(source: &ExtractionSource, body: &str, _headers: &[(String, Str
             None
         }
         ExtractionSource::Regex(pattern, group) => {
-            if let Ok(re) = regex_lite::Regex::new(pattern) {
-                if let Some(caps) = re.captures(body) {
-                    if let Some(m) = caps.get(*group) {
+            if let Ok(re) = regex_lite::Regex::new(pattern)
+                && let Some(caps) = re.captures(body)
+                    && let Some(m) = caps.get(*group) {
                         return Some(m.as_str().to_string());
                     }
-                }
-            }
             None
         }
         ExtractionSource::Body => Some(body.to_string()),

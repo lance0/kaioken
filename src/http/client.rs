@@ -18,7 +18,10 @@ pub fn create_client(
         .tcp_nodelay(true)
         .gzip(true)
         .brotli(true)
-        .user_agent(format!("kaioken/{} (load-testing-tool)", env!("CARGO_PKG_VERSION")))
+        .user_agent(format!(
+            "kaioken/{} (load-testing-tool)",
+            env!("CARGO_PKG_VERSION")
+        ))
         .danger_accept_invalid_certs(insecure)
         .cookie_store(cookie_jar);
 

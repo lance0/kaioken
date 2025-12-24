@@ -1,10 +1,10 @@
 use crate::tui::Theme;
 use crate::types::{ErrorKind, StatsSnapshot};
 use ratatui::{
+    Frame,
     layout::{Constraint, Direction, Layout, Rect},
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph},
-    Frame,
 };
 
 pub struct StatusWidget<'a> {

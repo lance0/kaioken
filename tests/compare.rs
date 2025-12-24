@@ -204,7 +204,7 @@ mod basic_comparison {
 
         let json: serde_json::Value = serde_json::from_slice(&output).unwrap();
         assert!(json["metrics"].as_array().is_some());
-        assert_eq!(json["has_regressions"].as_bool().unwrap(), false);
+        assert!(!json["has_regressions"].as_bool().unwrap());
     }
 }
 
@@ -422,11 +422,11 @@ mod warnings {
         let baseline = dir.path().join("baseline.json");
         let current = dir.path().join("current.json");
 
-        let mut baseline_json = create_test_results(1000, 100.0, 0.01, 10000, None, None);
-        baseline_json = baseline_json.replace(r#""concurrency": 50"#, r#""concurrency": 50"#);
+        let baseline_json = create_test_results(1000, 100.0, 0.01, 10000, None, None);
 
-        let mut current_json = create_test_results(1000, 100.0, 0.01, 10000, None, None);
-        current_json = current_json.replace(r#""concurrency": 50"#, r#""concurrency": 100"#);
+        let current_json =
+            create_test_results(1000, 100.0, 0.01, 10000, None, None)
+                .replace(r#""concurrency": 50"#, r#""concurrency": 100"#);
 
         fs::write(&baseline, baseline_json).unwrap();
         fs::write(&current, current_json).unwrap();

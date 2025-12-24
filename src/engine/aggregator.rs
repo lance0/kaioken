@@ -1,7 +1,7 @@
-use crate::engine::{create_snapshot, create_snapshot_with_arrival_rate, Stats};
+use crate::engine::{Stats, create_snapshot, create_snapshot_with_arrival_rate};
 use crate::types::{RequestResult, RunPhase, StatsSnapshot};
-use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 use tokio::sync::{mpsc, watch};
 use tokio_util::sync::CancellationToken;
@@ -139,15 +139,23 @@ impl Aggregator {
 
     fn send_snapshot(&self) {
         let snapshot = if self.dropped_iterations.is_some() || self.vus_active.is_some() {
-            let dropped = self.dropped_iterations
+            let dropped = self
+                .dropped_iterations
                 .as_ref()
                 .map(|d| d.load(Ordering::Relaxed))
                 .unwrap_or(0);
-            let active = self.vus_active
+            let active = self
+                .vus_active
                 .as_ref()
                 .map(|v| v.load(Ordering::Relaxed))
                 .unwrap_or(0);
-            create_snapshot_with_arrival_rate(&self.stats, dropped, active, self.vus_max, self.target_rate)
+            create_snapshot_with_arrival_rate(
+                &self.stats,
+                dropped,
+                active,
+                self.vus_max,
+                self.target_rate,
+            )
         } else {
             create_snapshot(&self.stats)
         };

@@ -48,11 +48,7 @@ impl Flavor {
     }
 
     pub fn status_cancelled(&self) -> &'static str {
-        if self.serious {
-            "Cancelled"
-        } else {
-            "K.O."
-        }
+        if self.serious { "Cancelled" } else { "K.O." }
     }
 
     pub fn status_completed(&self) -> &'static str {
@@ -64,11 +60,7 @@ impl Flavor {
     }
 
     pub fn title(&self) -> &'static str {
-        if self.serious {
-            "Load Test"
-        } else {
-            "KAIOKEN"
-        }
+        if self.serious { "Load Test" } else { "KAIOKEN" }
     }
 
     pub fn power_level_title(&self) -> &'static str {
@@ -81,19 +73,11 @@ impl Flavor {
 
     #[allow(dead_code)]
     pub fn improvement_indicator(&self) -> &'static str {
-        if self.serious {
-            "IMPROVED"
-        } else {
-            "POWER UP"
-        }
+        if self.serious { "IMPROVED" } else { "POWER UP" }
     }
 
     #[allow(dead_code)]
     pub fn regression_indicator(&self) -> &'static str {
-        if self.serious {
-            "REGRESSED"
-        } else {
-            "DRAIN"
-        }
+        if self.serious { "REGRESSED" } else { "DRAIN" }
     }
 }

@@ -26,18 +26,15 @@ pub async fn execute_request(
         Ok(response) => {
             let status = response.status().as_u16();
             let content_length = response.content_length().unwrap_or(0);
-            
+
             let response_body = if capture_body {
-                match response.text().await {
-                    Ok(text) => Some(text),
-                    Err(_) => None,
-                }
+                (response.text().await).ok()
             } else {
                 // Consume body to allow connection reuse
                 let _ = response.bytes().await;
                 None
             };
-            
+
             let latency_us = start.elapsed().as_micros() as u64;
             RequestResult::success(latency_us, status, content_length, response_body)
         }

@@ -3,12 +3,12 @@ use ratatui::style::{Color, Modifier, Style};
 #[derive(Clone, Copy, PartialEq, Eq, Default)]
 pub enum ThemeMode {
     #[default]
-    Earth,      // Default dark theme
-    Namek,      // Green planet with blue water
-    Vegeta,     // Red/orange destroyed planet
+    Earth, // Default dark theme
+    Namek,       // Green planet with blue water
+    Vegeta,      // Red/orange destroyed planet
     TimeChamber, // Hyperbolic Time Chamber - white void
-    Tournament, // World Martial Arts Tournament - gold/purple
-    Frieza,     // Frieza Force - purple/pink
+    Tournament,  // World Martial Arts Tournament - gold/purple
+    Frieza,      // Frieza Force - purple/pink
 }
 
 impl ThemeMode {
@@ -95,11 +95,11 @@ impl Theme {
                 .add_modifier(Modifier::BOLD),
             success: Style::default().fg(Color::Rgb(50, 205, 50)), // Lime green
             warning: Style::default().fg(Color::Rgb(173, 255, 47)), // Green yellow
-            error: Style::default().fg(Color::Rgb(255, 99, 71)), // Tomato
-            muted: Style::default().fg(Color::Rgb(85, 107, 47)), // Dark olive
+            error: Style::default().fg(Color::Rgb(255, 99, 71)),   // Tomato
+            muted: Style::default().fg(Color::Rgb(85, 107, 47)),   // Dark olive
             bar_filled: Style::default().fg(Color::Rgb(0, 255, 127)),
             bar_empty: Style::default().fg(Color::Rgb(47, 79, 79)), // Dark slate
-            border: Style::default().fg(Color::Rgb(46, 139, 87)), // Sea green
+            border: Style::default().fg(Color::Rgb(46, 139, 87)),   // Sea green
             status_ok: Style::default().fg(Color::Rgb(0, 255, 127)),
             status_error: Style::default().fg(Color::Rgb(255, 69, 0)),
             background: Color::Reset,
@@ -121,11 +121,11 @@ impl Theme {
                 .add_modifier(Modifier::BOLD),
             success: Style::default().fg(Color::Rgb(255, 165, 0)), // Orange
             warning: Style::default().fg(Color::Rgb(255, 255, 0)), // Yellow
-            error: Style::default().fg(Color::Rgb(220, 20, 60)), // Crimson
-            muted: Style::default().fg(Color::Rgb(139, 69, 19)), // Saddle brown
+            error: Style::default().fg(Color::Rgb(220, 20, 60)),   // Crimson
+            muted: Style::default().fg(Color::Rgb(139, 69, 19)),   // Saddle brown
             bar_filled: Style::default().fg(Color::Rgb(255, 69, 0)),
             bar_empty: Style::default().fg(Color::Rgb(128, 0, 0)), // Maroon
-            border: Style::default().fg(Color::Rgb(178, 34, 34)), // Firebrick
+            border: Style::default().fg(Color::Rgb(178, 34, 34)),  // Firebrick
             status_ok: Style::default().fg(Color::Rgb(255, 140, 0)),
             status_error: Style::default().fg(Color::Rgb(220, 20, 60)),
             background: Color::Reset,
@@ -147,11 +147,11 @@ impl Theme {
                 .add_modifier(Modifier::BOLD),
             success: Style::default().fg(Color::Rgb(60, 179, 113)), // Medium sea green
             warning: Style::default().fg(Color::Rgb(218, 165, 32)), // Goldenrod
-            error: Style::default().fg(Color::Rgb(178, 34, 34)), // Firebrick
-            muted: Style::default().fg(Color::Rgb(169, 169, 169)), // Dark gray
+            error: Style::default().fg(Color::Rgb(178, 34, 34)),    // Firebrick
+            muted: Style::default().fg(Color::Rgb(169, 169, 169)),  // Dark gray
             bar_filled: Style::default().fg(Color::Rgb(70, 130, 180)),
             bar_empty: Style::default().fg(Color::Rgb(211, 211, 211)), // Light gray
-            border: Style::default().fg(Color::Rgb(192, 192, 192)), // Silver
+            border: Style::default().fg(Color::Rgb(192, 192, 192)),    // Silver
             status_ok: Style::default().fg(Color::Rgb(60, 179, 113)),
             status_error: Style::default().fg(Color::Rgb(178, 34, 34)),
             background: Color::Reset,
@@ -173,11 +173,11 @@ impl Theme {
                 .add_modifier(Modifier::BOLD),
             success: Style::default().fg(Color::Rgb(50, 205, 50)), // Lime green
             warning: Style::default().fg(Color::Rgb(255, 165, 0)), // Orange
-            error: Style::default().fg(Color::Rgb(220, 20, 60)), // Crimson
-            muted: Style::default().fg(Color::Rgb(148, 0, 211)), // Dark violet
+            error: Style::default().fg(Color::Rgb(220, 20, 60)),   // Crimson
+            muted: Style::default().fg(Color::Rgb(148, 0, 211)),   // Dark violet
             bar_filled: Style::default().fg(Color::Rgb(255, 215, 0)),
             bar_empty: Style::default().fg(Color::Rgb(75, 0, 130)), // Indigo
-            border: Style::default().fg(Color::Rgb(138, 43, 226)), // Blue violet
+            border: Style::default().fg(Color::Rgb(138, 43, 226)),  // Blue violet
             status_ok: Style::default().fg(Color::Rgb(255, 215, 0)),
             status_error: Style::default().fg(Color::Rgb(220, 20, 60)),
             background: Color::Reset,
@@ -199,11 +199,11 @@ impl Theme {
                 .add_modifier(Modifier::BOLD),
             success: Style::default().fg(Color::Rgb(255, 20, 147)), // Deep pink
             warning: Style::default().fg(Color::Rgb(255, 182, 193)), // Light pink
-            error: Style::default().fg(Color::Rgb(139, 0, 139)), // Dark magenta
-            muted: Style::default().fg(Color::Rgb(128, 0, 128)), // Purple
+            error: Style::default().fg(Color::Rgb(139, 0, 139)),    // Dark magenta
+            muted: Style::default().fg(Color::Rgb(128, 0, 128)),    // Purple
             bar_filled: Style::default().fg(Color::Rgb(186, 85, 211)),
             bar_empty: Style::default().fg(Color::Rgb(72, 61, 139)), // Dark slate blue
-            border: Style::default().fg(Color::Rgb(148, 0, 211)), // Dark violet
+            border: Style::default().fg(Color::Rgb(148, 0, 211)),    // Dark violet
             status_ok: Style::default().fg(Color::Rgb(255, 105, 180)),
             status_error: Style::default().fg(Color::Rgb(139, 0, 139)),
             background: Color::Reset,

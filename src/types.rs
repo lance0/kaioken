@@ -9,8 +9,8 @@ use std::time::Duration;
 #[derive(Debug, Clone)]
 pub struct Stage {
     pub duration: Duration,
-    pub target: Option<u32>,       // VU-based target (constant VUs mode)
-    pub target_rate: Option<u32>,  // RPS-based target (arrival rate mode)
+    pub target: Option<u32>,      // VU-based target (constant VUs mode)
+    pub target_rate: Option<u32>, // RPS-based target (arrival rate mode)
 }
 
 // ============================================================================
@@ -213,7 +213,12 @@ pub struct RequestResult {
 }
 
 impl RequestResult {
-    pub fn success(latency_us: u64, status: u16, bytes_received: u64, body: Option<String>) -> Self {
+    pub fn success(
+        latency_us: u64,
+        status: u16,
+        bytes_received: u64,
+        body: Option<String>,
+    ) -> Self {
         Self {
             latency_us,
             status: Some(status),
@@ -279,7 +284,7 @@ pub struct StatsSnapshot {
     pub dropped_iterations: u64,
     pub vus_active: u32,
     pub vus_max: u32,
-    pub target_rate: u32,  // Target RPS (0 = not in arrival rate mode)
+    pub target_rate: u32, // Target RPS (0 = not in arrival rate mode)
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -301,10 +306,10 @@ pub struct Extraction {
 
 #[derive(Debug, Clone)]
 pub enum ExtractionSource {
-    JsonPath(String),         // json:$.access_token
-    Header(String),           // header:X-Request-Id
-    Regex(String, usize),     // regex:token=(\w+):1
-    Body,                     // body (entire response)
+    JsonPath(String),     // json:$.access_token
+    Header(String),       // header:X-Request-Id
+    Regex(String, usize), // regex:token=(\w+):1
+    Body,                 // body (entire response)
 }
 
 impl ExtractionSource {
@@ -326,7 +331,10 @@ impl ExtractionSource {
         } else if s == "body" {
             Ok(ExtractionSource::Body)
         } else {
-            Err(format!("Unknown extraction source: '{}'. Expected json:, header:, regex:, or body", s))
+            Err(format!(
+                "Unknown extraction source: '{}'. Expected json:, header:, regex:, or body",
+                s
+            ))
         }
     }
 }
@@ -368,8 +376,8 @@ pub struct LoadConfig {
     pub stages: Vec<Stage>,
     pub think_time: Option<Duration>,
     pub fail_fast: bool,
-    pub arrival_rate: Option<u32>,  // Requests per second
-    pub max_vus: Option<u32>,       // Max concurrent requests
+    pub arrival_rate: Option<u32>, // Requests per second
+    pub max_vus: Option<u32>,      // Max concurrent requests
 }
 
 impl Default for LoadConfig {
@@ -422,6 +430,9 @@ pub enum RunState {
 
 impl RunState {
     pub fn is_terminal(&self) -> bool {
-        matches!(self, RunState::Completed | RunState::Cancelled | RunState::Error)
+        matches!(
+            self,
+            RunState::Completed | RunState::Cancelled | RunState::Error
+        )
     }
 }

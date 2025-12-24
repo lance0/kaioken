@@ -1,18 +1,30 @@
 use crate::compare::CompareResult;
 
 pub fn print_comparison(result: &CompareResult, serious: bool) {
-    let title = if serious { "Comparison Results" } else { "FUSION" };
+    let title = if serious {
+        "Comparison Results"
+    } else {
+        "FUSION"
+    };
 
     println!();
     println!("┌{:─^70}┐", "");
-    println!("│{:^70}│", format!("{}: {} vs {}", title, 
-        truncate(&result.baseline_file, 25), 
-        truncate(&result.current_file, 25)));
+    println!(
+        "│{:^70}│",
+        format!(
+            "{}: {} vs {}",
+            title,
+            truncate(&result.baseline_file, 25),
+            truncate(&result.current_file, 25)
+        )
+    );
     println!("├{:─^70}┤", "");
 
     // Header
-    println!("│ {:20} {:>12} {:>12} {:>10} {:>10} │", 
-        "Metric", "Baseline", "Current", "Delta", "Status");
+    println!(
+        "│ {:20} {:>12} {:>12} {:>10} {:>10} │",
+        "Metric", "Baseline", "Current", "Delta", "Status"
+    );
     println!("│{:─^70}│", "");
 
     // Metrics
@@ -34,7 +46,8 @@ pub fn print_comparison(result: &CompareResult, serious: bool) {
         let baseline_str = format_value(m.baseline, &m.unit);
         let current_str = format_value(m.current, &m.unit);
 
-        println!("│ {:20} {:>12} {:>12} {:>10} {:>10} │",
+        println!(
+            "│ {:20} {:>12} {:>12} {:>10} {:>10} │",
             truncate(&m.name, 20),
             baseline_str,
             current_str,
@@ -56,13 +69,26 @@ pub fn print_comparison(result: &CompareResult, serious: bool) {
     // Regressions
     if !result.regressions.is_empty() {
         println!("├{:─^70}┤", "");
-        let reg_title = if serious { "REGRESSIONS DETECTED" } else { "⚠️  REGRESSIONS DETECTED" };
+        let reg_title = if serious {
+            "REGRESSIONS DETECTED"
+        } else {
+            "⚠️  REGRESSIONS DETECTED"
+        };
         println!("│{:^70}│", reg_title);
         println!("│{:70}│", "");
         for reg in &result.regressions {
-            println!("│  • {:66}│", 
-                truncate(&format!("{}: {:.1}% worse (threshold: {:.1}%)", 
-                    reg.metric, reg.delta_pct.abs(), reg.threshold_pct), 66));
+            println!(
+                "│  • {:66}│",
+                truncate(
+                    &format!(
+                        "{}: {:.1}% worse (threshold: {:.1}%)",
+                        reg.metric,
+                        reg.delta_pct.abs(),
+                        reg.threshold_pct
+                    ),
+                    66
+                )
+            );
         }
     }
 

@@ -44,8 +44,16 @@ fn write_markdown_content<W: Write>(
     writeln!(writer, "| Total Requests | {} |", snapshot.total_requests)?;
     writeln!(writer, "| Successful | {} |", snapshot.successful)?;
     writeln!(writer, "| Failed | {} |", snapshot.failed)?;
-    writeln!(writer, "| Requests/sec | {:.2} |", snapshot.requests_per_sec)?;
-    writeln!(writer, "| Error Rate | {:.2}% |", snapshot.error_rate * 100.0)?;
+    writeln!(
+        writer,
+        "| Requests/sec | {:.2} |",
+        snapshot.requests_per_sec
+    )?;
+    writeln!(
+        writer,
+        "| Error Rate | {:.2}% |",
+        snapshot.error_rate * 100.0
+    )?;
     writeln!(writer)?;
 
     // Latency
@@ -53,13 +61,41 @@ fn write_markdown_content<W: Write>(
     writeln!(writer)?;
     writeln!(writer, "| Percentile | Latency (ms) |")?;
     writeln!(writer, "|------------|--------------|")?;
-    writeln!(writer, "| Min | {:.2} |", snapshot.latency_min_us as f64 / 1000.0)?;
-    writeln!(writer, "| p50 | {:.2} |", snapshot.latency_p50_us as f64 / 1000.0)?;
-    writeln!(writer, "| p90 | {:.2} |", snapshot.latency_p90_us as f64 / 1000.0)?;
-    writeln!(writer, "| p95 | {:.2} |", snapshot.latency_p95_us as f64 / 1000.0)?;
-    writeln!(writer, "| p99 | {:.2} |", snapshot.latency_p99_us as f64 / 1000.0)?;
-    writeln!(writer, "| p99.9 | {:.2} |", snapshot.latency_p999_us as f64 / 1000.0)?;
-    writeln!(writer, "| Max | {:.2} |", snapshot.latency_max_us as f64 / 1000.0)?;
+    writeln!(
+        writer,
+        "| Min | {:.2} |",
+        snapshot.latency_min_us as f64 / 1000.0
+    )?;
+    writeln!(
+        writer,
+        "| p50 | {:.2} |",
+        snapshot.latency_p50_us as f64 / 1000.0
+    )?;
+    writeln!(
+        writer,
+        "| p90 | {:.2} |",
+        snapshot.latency_p90_us as f64 / 1000.0
+    )?;
+    writeln!(
+        writer,
+        "| p95 | {:.2} |",
+        snapshot.latency_p95_us as f64 / 1000.0
+    )?;
+    writeln!(
+        writer,
+        "| p99 | {:.2} |",
+        snapshot.latency_p99_us as f64 / 1000.0
+    )?;
+    writeln!(
+        writer,
+        "| p99.9 | {:.2} |",
+        snapshot.latency_p999_us as f64 / 1000.0
+    )?;
+    writeln!(
+        writer,
+        "| Max | {:.2} |",
+        snapshot.latency_max_us as f64 / 1000.0
+    )?;
     writeln!(writer)?;
 
     // Status Codes

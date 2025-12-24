@@ -1,8 +1,8 @@
 use crate::types::Stage;
-use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::time::{Duration, Instant};
-use tokio::sync::{watch, Notify, Semaphore};
+use tokio::sync::{Notify, Semaphore, watch};
 use tokio::time::sleep;
 
 pub struct RateLimiter {
@@ -187,7 +187,8 @@ impl StagesScheduler {
             return;
         }
 
-        let mut current_workers: u32 = self.stages
+        let mut current_workers: u32 = self
+            .stages
             .first()
             .and_then(|s| s.target)
             .map(|t| t.min(1))
@@ -234,7 +235,8 @@ impl StagesScheduler {
                     current_workers = target;
                 }
 
-                let sleep_time = ramp_interval.min(stage_end.saturating_duration_since(Instant::now()));
+                let sleep_time =
+                    ramp_interval.min(stage_end.saturating_duration_since(Instant::now()));
                 if sleep_time.is_zero() {
                     break;
                 }
@@ -245,8 +247,8 @@ impl StagesScheduler {
         }
 
         // Final stage info update - only for VU-based stages
-        if let Some(last) = self.stages.last() {
-            if let Some(target) = last.target {
+        if let Some(last) = self.stages.last()
+            && let Some(target) = last.target {
                 let _ = self.stage_info_tx.send(StageInfo {
                     stage_index: self.stages.len() - 1,
                     stage_count: self.stages.len(),
@@ -256,6 +258,5 @@ impl StagesScheduler {
                     stage_duration: last.duration,
                 });
             }
-        }
     }
 }

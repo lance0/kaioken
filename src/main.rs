@@ -11,8 +11,11 @@ use clap::Parser;
 use cli::{Cli, Commands, RunArgs};
 use compare::{compare_results, print_comparison};
 use config::{load_config, merge_config};
-use engine::{evaluate_thresholds, print_threshold_results, Engine};
-use output::{print_csv, print_html, print_json, print_markdown, write_csv, write_html, write_json, write_markdown};
+use engine::{Engine, evaluate_thresholds, print_threshold_results};
+use output::{
+    print_csv, print_html, print_json, print_markdown, write_csv, write_html, write_json,
+    write_markdown,
+};
 use std::io::{self, Write};
 use std::sync::atomic::Ordering;
 use tui::App;
@@ -65,7 +68,10 @@ fn run_init(args: &cli::InitArgs) -> Result<i32, String> {
         ));
     }
 
-    let url = args.url.as_deref().unwrap_or("https://api.example.com/health");
+    let url = args
+        .url
+        .as_deref()
+        .unwrap_or("https://api.example.com/health");
 
     let config = format!(
         r#"# Kaioken Load Test Configuration
@@ -125,8 +131,7 @@ duration = "30s"
         url = url
     );
 
-    fs::write(&args.output, config)
-        .map_err(|e| format!("Failed to write config file: {}", e))?;
+    fs::write(&args.output, config).map_err(|e| format!("Failed to write config file: {}", e))?;
 
     eprintln!("Created config file: {}", args.output.display());
     eprintln!("\nRun with: kaioken run -f {}", args.output.display());
@@ -242,14 +247,27 @@ async fn run_load_test(args: &RunArgs) -> Result<i32, String> {
         }
         if !config.stages.is_empty() {
             let total: std::time::Duration = config.stages.iter().map(|s| s.duration).sum();
-            let max_target = config.stages.iter().filter_map(|s| s.target).max().unwrap_or(0);
+            let max_target = config
+                .stages
+                .iter()
+                .filter_map(|s| s.target)
+                .max()
+                .unwrap_or(0);
             let max_rate = config.stages.iter().filter_map(|s| s.target_rate).max();
             if let Some(rate) = max_rate {
-                eprintln!("Stages:      {} defined (total: {:?}, max rate: {} RPS)", 
-                    config.stages.len(), total, rate);
+                eprintln!(
+                    "Stages:      {} defined (total: {:?}, max rate: {} RPS)",
+                    config.stages.len(),
+                    total,
+                    rate
+                );
             } else {
-                eprintln!("Stages:      {} defined (total: {:?}, max workers: {})", 
-                    config.stages.len(), total, max_target);
+                eprintln!(
+                    "Stages:      {} defined (total: {:?}, max workers: {})",
+                    config.stages.len(),
+                    total,
+                    max_target
+                );
             }
             for (i, s) in config.stages.iter().enumerate() {
                 if let Some(target) = s.target {
@@ -328,7 +346,8 @@ async fn run_load_test(args: &RunArgs) -> Result<i32, String> {
             .values()
             .fold((0, 0), |(p, t), (passed, total)| (p + passed, t + total));
         if total_checks > 0 {
-            final_snapshot.overall_check_pass_rate = Some(total_passed as f64 / total_checks as f64);
+            final_snapshot.overall_check_pass_rate =
+                Some(total_passed as f64 / total_checks as f64);
         }
     }
 
@@ -350,8 +369,13 @@ async fn run_load_test(args: &RunArgs) -> Result<i32, String> {
 
     // Print output to stdout if in headless mode
     if output_json {
-        print_json(&final_snapshot, &config, threshold_results_opt, check_stats_opt)
-            .map_err(|e| format!("Failed to write JSON: {}", e))?;
+        print_json(
+            &final_snapshot,
+            &config,
+            threshold_results_opt,
+            check_stats_opt,
+        )
+        .map_err(|e| format!("Failed to write JSON: {}", e))?;
     } else if !use_tui {
         match format.as_str() {
             "csv" => print_csv(&final_snapshot, &config)
@@ -360,8 +384,13 @@ async fn run_load_test(args: &RunArgs) -> Result<i32, String> {
                 .map_err(|e| format!("Failed to write Markdown: {}", e))?,
             "html" => print_html(&final_snapshot, &config)
                 .map_err(|e| format!("Failed to write HTML: {}", e))?,
-            "json" => print_json(&final_snapshot, &config, threshold_results_opt, check_stats_opt)
-                .map_err(|e| format!("Failed to write JSON: {}", e))?,
+            "json" => print_json(
+                &final_snapshot,
+                &config,
+                threshold_results_opt,
+                check_stats_opt,
+            )
+            .map_err(|e| format!("Failed to write JSON: {}", e))?,
             _ => print_summary(&final_snapshot, args.serious),
         }
     }
@@ -372,7 +401,13 @@ async fn run_load_test(args: &RunArgs) -> Result<i32, String> {
             "csv" => write_csv(&final_snapshot, &config, path),
             "md" | "markdown" => write_markdown(&final_snapshot, &config, path),
             "html" => write_html(&final_snapshot, &config, path),
-            _ => write_json(&final_snapshot, &config, path, threshold_results_opt, check_stats_opt),
+            _ => write_json(
+                &final_snapshot,
+                &config,
+                path,
+                threshold_results_opt,
+                check_stats_opt,
+            ),
         };
         write_result.map_err(|e| format!("Failed to write output file: {}", e))?;
 
@@ -419,7 +454,11 @@ fn extract_host(url: &str) -> Option<&str> {
 }
 
 fn print_summary(snapshot: &types::StatsSnapshot, serious: bool) {
-    let title = if serious { "Load Test Results" } else { "KAIOKEN RESULTS" };
+    let title = if serious {
+        "Load Test Results"
+    } else {
+        "KAIOKEN RESULTS"
+    };
 
     println!("\n{}", "=".repeat(50));
     println!("{:^50}", title);
@@ -433,14 +472,38 @@ fn print_summary(snapshot: &types::StatsSnapshot, serious: bool) {
     println!("  Error Rate:      {:>11.2}%", snapshot.error_rate * 100.0);
 
     println!("\nLatency (ms):");
-    println!("  Min:             {:>12.2}", snapshot.latency_min_us as f64 / 1000.0);
-    println!("  Max:             {:>12.2}", snapshot.latency_max_us as f64 / 1000.0);
-    println!("  Mean:            {:>12.2}", snapshot.latency_mean_us / 1000.0);
-    println!("  p50:             {:>12.2}", snapshot.latency_p50_us as f64 / 1000.0);
-    println!("  p90:             {:>12.2}", snapshot.latency_p90_us as f64 / 1000.0);
-    println!("  p95:             {:>12.2}", snapshot.latency_p95_us as f64 / 1000.0);
-    println!("  p99:             {:>12.2}", snapshot.latency_p99_us as f64 / 1000.0);
-    println!("  p99.9:           {:>12.2}", snapshot.latency_p999_us as f64 / 1000.0);
+    println!(
+        "  Min:             {:>12.2}",
+        snapshot.latency_min_us as f64 / 1000.0
+    );
+    println!(
+        "  Max:             {:>12.2}",
+        snapshot.latency_max_us as f64 / 1000.0
+    );
+    println!(
+        "  Mean:            {:>12.2}",
+        snapshot.latency_mean_us / 1000.0
+    );
+    println!(
+        "  p50:             {:>12.2}",
+        snapshot.latency_p50_us as f64 / 1000.0
+    );
+    println!(
+        "  p90:             {:>12.2}",
+        snapshot.latency_p90_us as f64 / 1000.0
+    );
+    println!(
+        "  p95:             {:>12.2}",
+        snapshot.latency_p95_us as f64 / 1000.0
+    );
+    println!(
+        "  p99:             {:>12.2}",
+        snapshot.latency_p99_us as f64 / 1000.0
+    );
+    println!(
+        "  p99.9:           {:>12.2}",
+        snapshot.latency_p999_us as f64 / 1000.0
+    );
 
     if !snapshot.status_codes.is_empty() {
         println!("\nStatus Codes:");

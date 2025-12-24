@@ -15,7 +15,11 @@ pub fn print_html(snapshot: &StatsSnapshot, config: &LoadConfig) -> io::Result<(
     render_html(&mut writer, snapshot, config)
 }
 
-fn render_html<W: Write>(w: &mut W, snapshot: &StatsSnapshot, config: &LoadConfig) -> io::Result<()> {
+fn render_html<W: Write>(
+    w: &mut W,
+    snapshot: &StatsSnapshot,
+    config: &LoadConfig,
+) -> io::Result<()> {
     let summary = Summary {
         total_requests: snapshot.total_requests,
         successful: snapshot.successful,
@@ -87,7 +91,9 @@ fn render_html<W: Write>(w: &mut W, snapshot: &StatsSnapshot, config: &LoadConfi
         .collect();
     let timeline_json = format!("[{}]", timeline_data.join(","));
 
-    write!(w, r##"<!DOCTYPE html>
+    write!(
+        w,
+        r##"<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -314,8 +320,16 @@ fn render_html<W: Write>(w: &mut W, snapshot: &StatsSnapshot, config: &LoadConfi
         failed = summary.failed,
         error_rate = summary.error_rate * 100.0,
         latency_bars = render_latency_bars(&latency),
-        status_codes = if status_codes_html.is_empty() { "<p style=\"color: var(--text-secondary)\">No data</p>".to_string() } else { status_codes_html },
-        errors = if errors_html.is_empty() { "<p style=\"color: var(--text-secondary)\">None</p>".to_string() } else { errors_html },
+        status_codes = if status_codes_html.is_empty() {
+            "<p style=\"color: var(--text-secondary)\">No data</p>".to_string()
+        } else {
+            status_codes_html
+        },
+        errors = if errors_html.is_empty() {
+            "<p style=\"color: var(--text-secondary)\">None</p>".to_string()
+        } else {
+            errors_html
+        },
         concurrency = config.concurrency,
         duration = config.duration.as_secs(),
         timeout = config.timeout.as_millis(),

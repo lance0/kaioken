@@ -20,10 +20,7 @@ fn write_csv_content<W: Write>(
     config: &LoadConfig,
 ) -> io::Result<()> {
     // Header
-    writeln!(
-        writer,
-        "metric,value"
-    )?;
+    writeln!(writer, "metric,value")?;
 
     // Metadata
     writeln!(writer, "url,\"{}\"", config.url)?;
@@ -39,14 +36,46 @@ fn write_csv_content<W: Write>(
     writeln!(writer, "error_rate,{:.6}", snapshot.error_rate)?;
 
     // Latency (ms)
-    writeln!(writer, "latency_min_ms,{:.2}", snapshot.latency_min_us as f64 / 1000.0)?;
-    writeln!(writer, "latency_max_ms,{:.2}", snapshot.latency_max_us as f64 / 1000.0)?;
-    writeln!(writer, "latency_mean_ms,{:.2}", snapshot.latency_mean_us / 1000.0)?;
-    writeln!(writer, "latency_p50_ms,{:.2}", snapshot.latency_p50_us as f64 / 1000.0)?;
-    writeln!(writer, "latency_p90_ms,{:.2}", snapshot.latency_p90_us as f64 / 1000.0)?;
-    writeln!(writer, "latency_p95_ms,{:.2}", snapshot.latency_p95_us as f64 / 1000.0)?;
-    writeln!(writer, "latency_p99_ms,{:.2}", snapshot.latency_p99_us as f64 / 1000.0)?;
-    writeln!(writer, "latency_p999_ms,{:.2}", snapshot.latency_p999_us as f64 / 1000.0)?;
+    writeln!(
+        writer,
+        "latency_min_ms,{:.2}",
+        snapshot.latency_min_us as f64 / 1000.0
+    )?;
+    writeln!(
+        writer,
+        "latency_max_ms,{:.2}",
+        snapshot.latency_max_us as f64 / 1000.0
+    )?;
+    writeln!(
+        writer,
+        "latency_mean_ms,{:.2}",
+        snapshot.latency_mean_us / 1000.0
+    )?;
+    writeln!(
+        writer,
+        "latency_p50_ms,{:.2}",
+        snapshot.latency_p50_us as f64 / 1000.0
+    )?;
+    writeln!(
+        writer,
+        "latency_p90_ms,{:.2}",
+        snapshot.latency_p90_us as f64 / 1000.0
+    )?;
+    writeln!(
+        writer,
+        "latency_p95_ms,{:.2}",
+        snapshot.latency_p95_us as f64 / 1000.0
+    )?;
+    writeln!(
+        writer,
+        "latency_p99_ms,{:.2}",
+        snapshot.latency_p99_us as f64 / 1000.0
+    )?;
+    writeln!(
+        writer,
+        "latency_p999_ms,{:.2}",
+        snapshot.latency_p999_us as f64 / 1000.0
+    )?;
 
     // Status codes
     let mut codes: Vec<_> = snapshot.status_codes.iter().collect();

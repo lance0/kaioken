@@ -79,7 +79,8 @@ impl Stats {
 
         let now = Instant::now();
         self.rolling_window.push((now, 1));
-        self.rolling_window.retain(|(t, _)| now.duration_since(*t) < Duration::from_secs(1));
+        self.rolling_window
+            .retain(|(t, _)| now.duration_since(*t) < Duration::from_secs(1));
 
         self.update_timeline();
     }

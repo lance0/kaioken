@@ -44,8 +44,18 @@ pub fn compare_results(args: &CompareArgs) -> Result<CompareResult, String> {
     let mut warnings = Vec::new();
 
     // Determine load models
-    let baseline_model = baseline.metadata.load.load_model.as_deref().unwrap_or("closed");
-    let current_model = current.metadata.load.load_model.as_deref().unwrap_or("closed");
+    let baseline_model = baseline
+        .metadata
+        .load
+        .load_model
+        .as_deref()
+        .unwrap_or("closed");
+    let current_model = current
+        .metadata
+        .load
+        .load_model
+        .as_deref()
+        .unwrap_or("closed");
     let baseline_is_open = baseline_model == "open";
     let current_is_open = current_model == "open";
 
@@ -54,7 +64,10 @@ pub fn compare_results(args: &CompareArgs) -> Result<CompareResult, String> {
     if baseline_is_open {
         let rate = baseline.metadata.load.arrival_rate.unwrap_or(0);
         let max_vus = baseline.metadata.load.max_vus.unwrap_or(0);
-        eprintln!("Baseline:  Open (arrival rate)  target={}  max_vus={}", rate, max_vus);
+        eprintln!(
+            "Baseline:  Open (arrival rate)  target={}  max_vus={}",
+            rate, max_vus
+        );
     } else {
         let vus = baseline.metadata.load.concurrency;
         eprintln!("Baseline:  Closed (VU-driven)   vus={}", vus);
@@ -62,7 +75,10 @@ pub fn compare_results(args: &CompareArgs) -> Result<CompareResult, String> {
     if current_is_open {
         let rate = current.metadata.load.arrival_rate.unwrap_or(0);
         let max_vus = current.metadata.load.max_vus.unwrap_or(0);
-        eprintln!("Candidate: Open (arrival rate)  target={}  max_vus={}", rate, max_vus);
+        eprintln!(
+            "Candidate: Open (arrival rate)  target={}  max_vus={}",
+            rate, max_vus
+        );
     } else {
         let vus = current.metadata.load.concurrency;
         eprintln!("Candidate: Closed (VU-driven)   vus={}", vus);
@@ -91,7 +107,10 @@ pub fn compare_results(args: &CompareArgs) -> Result<CompareResult, String> {
         let base_rate = baseline.metadata.load.arrival_rate.unwrap_or(0);
         let curr_rate = current.metadata.load.arrival_rate.unwrap_or(0);
         if base_rate != curr_rate {
-            warnings.push(format!("Target RPS differs: {} vs {}", base_rate, curr_rate));
+            warnings.push(format!(
+                "Target RPS differs: {} vs {}",
+                base_rate, curr_rate
+            ));
         }
         let base_max = baseline.metadata.load.max_vus.unwrap_or(0);
         let curr_max = current.metadata.load.max_vus.unwrap_or(0);
@@ -160,7 +179,9 @@ pub fn compare_results(args: &CompareArgs) -> Result<CompareResult, String> {
     );
     if err_cmp.regressed && current.summary.error_rate > 0.0 {
         let relative_change = if baseline.summary.error_rate > 0.0 {
-            ((current.summary.error_rate - baseline.summary.error_rate) / baseline.summary.error_rate) * 100.0
+            ((current.summary.error_rate - baseline.summary.error_rate)
+                / baseline.summary.error_rate)
+                * 100.0
         } else {
             100.0 // Any errors when baseline had none is bad
         };
@@ -178,11 +199,36 @@ pub fn compare_results(args: &CompareArgs) -> Result<CompareResult, String> {
 
     // Latency percentiles (lower is better)
     let latency_metrics = [
-        ("p50 latency", baseline.latency_us.p50, current.latency_us.p50, args.threshold_p99),
-        ("p90 latency", baseline.latency_us.p90, current.latency_us.p90, args.threshold_p99),
-        ("p95 latency", baseline.latency_us.p95, current.latency_us.p95, args.threshold_p99),
-        ("p99 latency", baseline.latency_us.p99, current.latency_us.p99, args.threshold_p99),
-        ("p99.9 latency", baseline.latency_us.p999, current.latency_us.p999, args.threshold_p999),
+        (
+            "p50 latency",
+            baseline.latency_us.p50,
+            current.latency_us.p50,
+            args.threshold_p99,
+        ),
+        (
+            "p90 latency",
+            baseline.latency_us.p90,
+            current.latency_us.p90,
+            args.threshold_p99,
+        ),
+        (
+            "p95 latency",
+            baseline.latency_us.p95,
+            current.latency_us.p95,
+            args.threshold_p99,
+        ),
+        (
+            "p99 latency",
+            baseline.latency_us.p99,
+            current.latency_us.p99,
+            args.threshold_p99,
+        ),
+        (
+            "p99.9 latency",
+            baseline.latency_us.p999,
+            current.latency_us.p999,
+            args.threshold_p999,
+        ),
     ];
 
     for (name, base_us, curr_us, threshold) in latency_metrics {
@@ -239,7 +285,13 @@ pub fn compare_results(args: &CompareArgs) -> Result<CompareResult, String> {
     })
 }
 
-fn compare_metric(name: &str, baseline: f64, current: f64, unit: &str, higher_is_better: bool) -> MetricComparison {
+fn compare_metric(
+    name: &str,
+    baseline: f64,
+    current: f64,
+    unit: &str,
+    higher_is_better: bool,
+) -> MetricComparison {
     let delta = current - baseline;
     let delta_pct = if baseline != 0.0 {
         (delta / baseline) * 100.0

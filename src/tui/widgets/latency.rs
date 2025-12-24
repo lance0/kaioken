@@ -1,10 +1,10 @@
 use crate::tui::Theme;
 use crate::types::StatsSnapshot;
 use ratatui::{
+    Frame,
     layout::Rect,
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph},
-    Frame,
 };
 
 pub struct LatencyWidget<'a> {

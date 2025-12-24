@@ -1,16 +1,16 @@
+use crate::engine::Stats;
 use crate::engine::aggregator::Aggregator;
 use crate::engine::arrival_rate::{ArrivalRateExecutor, RampingArrivalRateExecutor, RateStage};
 use crate::engine::scheduler::{RampUpScheduler, RateLimiter, StageInfo, StagesScheduler};
 use crate::engine::thresholds::evaluate_thresholds;
 use crate::engine::worker::{CheckResult, Worker};
-use crate::engine::Stats;
 use crate::http::create_client;
 use crate::types::{LoadConfig, RequestResult, RunPhase, RunState, StatsSnapshot, Threshold};
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::time::Duration;
-use tokio::sync::{mpsc, watch, Semaphore};
+use tokio::sync::{Semaphore, mpsc, watch};
 use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
 
@@ -127,7 +127,7 @@ impl Engine {
 
     async fn run_arrival_rate_mode(self) -> Result<Stats, String> {
         let max_vus = self.config.max_vus.unwrap_or(100);
-        
+
         let client = create_client(
             max_vus,
             self.config.timeout,
@@ -147,10 +147,16 @@ impl Engine {
 
         // Check if we have rate-based stages
         let has_rate_stages = self.config.stages.iter().any(|s| s.target_rate.is_some());
-        
+
         // Calculate total duration
         let total_duration = if has_rate_stages {
-            self.config.warmup + self.config.stages.iter().map(|s| s.duration).sum::<Duration>()
+            self.config.warmup
+                + self
+                    .config
+                    .stages
+                    .iter()
+                    .map(|s| s.duration)
+                    .sum::<Duration>()
         } else {
             self.config.warmup + self.config.duration
         };
@@ -168,8 +174,7 @@ impl Engine {
 
         // Spawn check stats aggregator
         let check_stats_clone = self.check_stats.clone();
-        let check_agg_handle = if let Some(mut rx) = check_rx {
-            Some(tokio::spawn(async move {
+        let check_agg_handle = check_rx.map(|mut rx| tokio::spawn(async move {
                 while let Some(check_result) = rx.recv().await {
                     let mut stats = check_stats_clone.lock().unwrap();
                     let entry = stats.entry(check_result.name).or_insert((0, 0));
@@ -178,10 +183,7 @@ impl Engine {
                     }
                     entry.1 += 1;
                 }
-            }))
-        } else {
-            None
-        };
+            }));
 
         // Create shared metric references for arrival rate tracking
         let dropped_ref = Arc::new(AtomicU64::new(0));
@@ -190,7 +192,11 @@ impl Engine {
 
         // Determine initial target rate
         let initial_target_rate = if has_rate_stages {
-            self.config.stages.first().and_then(|s| s.target_rate).unwrap_or(0)
+            self.config
+                .stages
+                .first()
+                .and_then(|s| s.target_rate)
+                .unwrap_or(0)
         } else {
             self.config.arrival_rate.unwrap_or(0)
         };
@@ -215,14 +221,23 @@ impl Engine {
         // Create and spawn appropriate executor based on configuration
         let executor_handle = if has_rate_stages {
             // Use ramping arrival rate executor with stages
-            let rate_stages: Vec<RateStage> = self.config.stages.iter()
-                .filter_map(|s| s.target_rate.map(|rate| RateStage {
-                    duration: s.duration,
-                    target_rate: rate,
-                }))
+            let rate_stages: Vec<RateStage> = self
+                .config
+                .stages
+                .iter()
+                .filter_map(|s| {
+                    s.target_rate.map(|rate| RateStage {
+                        duration: s.duration,
+                        target_rate: rate,
+                    })
+                })
                 .collect();
-            
-            let max_rate = rate_stages.iter().map(|s| s.target_rate).max().unwrap_or(10);
+
+            let max_rate = rate_stages
+                .iter()
+                .map(|s| s.target_rate)
+                .max()
+                .unwrap_or(10);
             let pre_allocated_vus = (max_rate / 10).max(1).min(max_vus);
 
             let executor = RampingArrivalRateExecutor::new(
@@ -253,15 +268,17 @@ impl Engine {
                 let sync_active = active_clone;
                 let sync_exec_dropped = exec_dropped.clone();
                 let sync_exec_active = exec_active.clone();
-                
+
                 tokio::spawn(async move {
                     loop {
-                        sync_dropped.store(sync_exec_dropped.load(Ordering::Relaxed), Ordering::Relaxed);
-                        sync_active.store(sync_exec_active.load(Ordering::Relaxed), Ordering::Relaxed);
+                        sync_dropped
+                            .store(sync_exec_dropped.load(Ordering::Relaxed), Ordering::Relaxed);
+                        sync_active
+                            .store(sync_exec_active.load(Ordering::Relaxed), Ordering::Relaxed);
                         tokio::time::sleep(Duration::from_millis(50)).await;
                     }
                 });
-                
+
                 executor.run().await;
             })
         } else {
@@ -298,15 +315,17 @@ impl Engine {
                 let sync_active = active_clone;
                 let sync_exec_dropped = exec_dropped.clone();
                 let sync_exec_active = exec_active.clone();
-                
+
                 tokio::spawn(async move {
                     loop {
-                        sync_dropped.store(sync_exec_dropped.load(Ordering::Relaxed), Ordering::Relaxed);
-                        sync_active.store(sync_exec_active.load(Ordering::Relaxed), Ordering::Relaxed);
+                        sync_dropped
+                            .store(sync_exec_dropped.load(Ordering::Relaxed), Ordering::Relaxed);
+                        sync_active
+                            .store(sync_exec_active.load(Ordering::Relaxed), Ordering::Relaxed);
                         tokio::time::sleep(Duration::from_millis(50)).await;
                     }
                 });
-                
+
                 executor.run().await;
             })
         };
@@ -340,8 +359,10 @@ impl Engine {
         }
 
         // Store final metrics
-        self.dropped_iterations.store(dropped_ref.load(Ordering::Relaxed), Ordering::Relaxed);
-        self.vus_active.store(vus_active_ref.load(Ordering::Relaxed), Ordering::Relaxed);
+        self.dropped_iterations
+            .store(dropped_ref.load(Ordering::Relaxed), Ordering::Relaxed);
+        self.vus_active
+            .store(vus_active_ref.load(Ordering::Relaxed), Ordering::Relaxed);
 
         if let Some(handle) = fail_fast_handle {
             handle.abort();
@@ -387,28 +408,37 @@ impl Engine {
         };
 
         // Determine if using stages or simple concurrency
-        let use_stages = !self.config.stages.is_empty() 
-            && self.config.stages.iter().any(|s| s.target.is_some());
-        let (worker_permits, total_duration, max_workers): (Arc<Semaphore>, Duration, u32) = if use_stages {
-            // Stages mode: use StagesScheduler
-            let max_target = self.config.stages.iter()
-                .filter_map(|s| s.target)
-                .max()
-                .unwrap_or(1);
-            let (stages_scheduler, stage_info_rx) = 
-                StagesScheduler::new(self.config.stages.clone(), max_target);
-            let permits = stages_scheduler.permits();
-            let duration = stages_scheduler.total_duration();
-            self.stage_info_rx = Some(stage_info_rx);
-            tokio::spawn(stages_scheduler.run());
-            (permits, self.config.warmup + duration, max_target)
-        } else {
-            // Simple mode: use RampUpScheduler
-            let ramp_scheduler = RampUpScheduler::new(self.config.concurrency, self.config.ramp_up);
-            let permits = ramp_scheduler.permits();
-            tokio::spawn(ramp_scheduler.run());
-            (permits, self.config.warmup + self.config.duration, self.config.concurrency)
-        };
+        let use_stages =
+            !self.config.stages.is_empty() && self.config.stages.iter().any(|s| s.target.is_some());
+        let (worker_permits, total_duration, max_workers): (Arc<Semaphore>, Duration, u32) =
+            if use_stages {
+                // Stages mode: use StagesScheduler
+                let max_target = self
+                    .config
+                    .stages
+                    .iter()
+                    .filter_map(|s| s.target)
+                    .max()
+                    .unwrap_or(1);
+                let (stages_scheduler, stage_info_rx) =
+                    StagesScheduler::new(self.config.stages.clone(), max_target);
+                let permits = stages_scheduler.permits();
+                let duration = stages_scheduler.total_duration();
+                self.stage_info_rx = Some(stage_info_rx);
+                tokio::spawn(stages_scheduler.run());
+                (permits, self.config.warmup + duration, max_target)
+            } else {
+                // Simple mode: use RampUpScheduler
+                let ramp_scheduler =
+                    RampUpScheduler::new(self.config.concurrency, self.config.ramp_up);
+                let permits = ramp_scheduler.permits();
+                tokio::spawn(ramp_scheduler.run());
+                (
+                    permits,
+                    self.config.warmup + self.config.duration,
+                    self.config.concurrency,
+                )
+            };
 
         let (result_tx, result_rx) = mpsc::channel::<RequestResult>(RESULT_CHANNEL_SIZE);
 
@@ -441,8 +471,7 @@ impl Engine {
 
         // Spawn check stats aggregator - drains channel completely
         let check_stats_clone = self.check_stats.clone();
-        let check_agg_handle = if let Some(mut rx) = check_rx {
-            Some(tokio::spawn(async move {
+        let check_agg_handle = check_rx.map(|mut rx| tokio::spawn(async move {
                 while let Some(check_result) = rx.recv().await {
                     let mut stats = check_stats_clone.lock().unwrap();
                     let entry = stats.entry(check_result.name).or_insert((0, 0));
@@ -451,10 +480,7 @@ impl Engine {
                     }
                     entry.1 += 1;
                 }
-            }))
-        } else {
-            None
-        };
+            }));
 
         for id in 0..max_workers {
             let worker = Worker::new(

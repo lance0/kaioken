@@ -208,11 +208,14 @@ pub fn create_output(
                     } else {
                         1.0
                     };
-                    (name.clone(), CheckResultOutput {
-                        passed: *passed,
-                        total: *total,
-                        pass_rate,
-                    })
+                    (
+                        name.clone(),
+                        CheckResultOutput {
+                            passed: *passed,
+                            total: *total,
+                            pass_rate,
+                        },
+                    )
                 })
                 .collect();
             Some(ChecksOutput {

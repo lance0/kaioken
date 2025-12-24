@@ -1,10 +1,10 @@
 use crate::http::execute_request;
 use crate::types::{Check, CheckCondition, RequestResult, Scenario};
 use reqwest::Client;
-use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
-use tokio::sync::{mpsc, Semaphore};
+use tokio::sync::{Semaphore, mpsc};
 use tokio_util::sync::CancellationToken;
 
 use super::worker::CheckResult;
@@ -259,11 +259,19 @@ async fn execute_iteration(
         (url, base_method.clone(), headers, body)
     };
 
-    let result = execute_request(client, &url, &method, &headers, body.as_deref(), capture_body).await;
+    let result = execute_request(
+        client,
+        &url,
+        &method,
+        &headers,
+        body.as_deref(),
+        capture_body,
+    )
+    .await;
 
     // Evaluate checks
-    if !checks.is_empty() {
-        if let Some(tx) = &check_tx {
+    if !checks.is_empty()
+        && let Some(tx) = &check_tx {
             let body_str = result.body.as_deref().unwrap_or("");
             for check in checks.iter() {
                 let passed = check.condition.evaluate(result.status, body_str);
@@ -275,7 +283,6 @@ async fn execute_iteration(
                     .await;
             }
         }
-    }
 
     Some(result)
 }

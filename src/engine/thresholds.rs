@@ -62,10 +62,7 @@ pub fn print_threshold_results(results: &[ThresholdResult]) {
         };
 
         let actual_str = format_metric_value(&result.metric, result.actual);
-        println!(
-            "  {} {} (actual: {})",
-            status, result.condition, actual_str
-        );
+        println!("  {} {} (actual: {})", status, result.condition, actual_str);
     }
 
     println!();

@@ -1,10 +1,10 @@
 use crate::tui::{Flavor, Theme};
 use crate::types::StatsSnapshot;
 use ratatui::{
+    Frame,
     layout::Rect,
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph},
-    Frame,
 };
 
 pub struct PowerWidget<'a> {
@@ -64,37 +64,64 @@ impl<'a> PowerWidget<'a> {
                 ]),
                 Line::from(vec![
                     Span::styled("Achieved (1s):", self.theme.normal),
-                    Span::styled(format!("{:>6.0}", achieved_rate), 
-                        if rate_diff > 10.0 { self.theme.warning } else { self.theme.success }),
+                    Span::styled(
+                        format!("{:>6.0}", achieved_rate),
+                        if rate_diff > 10.0 {
+                            self.theme.warning
+                        } else {
+                            self.theme.success
+                        },
+                    ),
                     Span::raw("  "),
                     Span::styled(format!("[{}]", rank), rank_style),
                 ]),
                 Line::from(vec![
                     Span::styled("Target RPS:  ", self.theme.normal),
-                    Span::styled(format!("{:>6}", self.snapshot.target_rate), self.theme.highlight),
+                    Span::styled(
+                        format!("{:>6}", self.snapshot.target_rate),
+                        self.theme.highlight,
+                    ),
                     Span::styled("  Dropped: ", self.theme.normal),
                     Span::styled(
                         format!("{} ({:.2}%)", self.snapshot.dropped_iterations, dropped_pct),
-                        if self.snapshot.dropped_iterations > 0 { self.theme.error } else { self.theme.success },
+                        if self.snapshot.dropped_iterations > 0 {
+                            self.theme.error
+                        } else {
+                            self.theme.success
+                        },
                     ),
                 ]),
                 Line::from(vec![
                     Span::styled("VUs:         ", self.theme.normal),
                     Span::styled(
-                        format!("{:>4}/{:<4}", self.snapshot.vus_active, self.snapshot.vus_max),
-                        if self.snapshot.vus_active >= self.snapshot.vus_max { self.theme.warning } else { self.theme.normal },
+                        format!(
+                            "{:>4}/{:<4}",
+                            self.snapshot.vus_active, self.snapshot.vus_max
+                        ),
+                        if self.snapshot.vus_active >= self.snapshot.vus_max {
+                            self.theme.warning
+                        } else {
+                            self.theme.normal
+                        },
                     ),
                     Span::styled("  Errors: ", self.theme.normal),
                     Span::styled(
                         format!("{:.2}%", self.snapshot.error_rate * 100.0),
-                        if self.snapshot.error_rate > 0.05 { self.theme.error }
-                        else if self.snapshot.error_rate > 0.01 { self.theme.warning }
-                        else { self.theme.success },
+                        if self.snapshot.error_rate > 0.05 {
+                            self.theme.error
+                        } else if self.snapshot.error_rate > 0.01 {
+                            self.theme.warning
+                        } else {
+                            self.theme.success
+                        },
                     ),
                 ]),
                 Line::from(vec![
                     Span::styled("Total:       ", self.theme.normal),
-                    Span::styled(format!("{:>7}", format_number(self.snapshot.total_requests)), self.theme.normal),
+                    Span::styled(
+                        format!("{:>7}", format_number(self.snapshot.total_requests)),
+                        self.theme.normal,
+                    ),
                 ]),
             ]
         } else {
@@ -113,21 +140,35 @@ impl<'a> PowerWidget<'a> {
                 ]),
                 Line::from(vec![
                     Span::styled("Rolling RPS: ", self.theme.normal),
-                    Span::styled(format!("{:>8.0}", self.snapshot.rolling_rps), self.theme.highlight),
+                    Span::styled(
+                        format!("{:>8.0}", self.snapshot.rolling_rps),
+                        self.theme.highlight,
+                    ),
                     Span::raw("  "),
                     Span::styled(format!("[{}]", rank), rank_style),
                 ]),
                 Line::from(vec![
                     Span::styled("Total:       ", self.theme.normal),
-                    Span::styled(format!("{:>8}", format_number(self.snapshot.total_requests)), self.theme.normal),
+                    Span::styled(
+                        format!("{:>8}", format_number(self.snapshot.total_requests)),
+                        self.theme.normal,
+                    ),
                 ]),
                 Line::from(vec![
                     Span::styled("Errors:      ", self.theme.normal),
                     Span::styled(
-                        format!("{:>8} ({:.2}%)", format_number(self.snapshot.failed), self.snapshot.error_rate * 100.0),
-                        if self.snapshot.error_rate > 0.05 { self.theme.error }
-                        else if self.snapshot.error_rate > 0.01 { self.theme.warning }
-                        else { self.theme.success },
+                        format!(
+                            "{:>8} ({:.2}%)",
+                            format_number(self.snapshot.failed),
+                            self.snapshot.error_rate * 100.0
+                        ),
+                        if self.snapshot.error_rate > 0.05 {
+                            self.theme.error
+                        } else if self.snapshot.error_rate > 0.01 {
+                            self.theme.warning
+                        } else {
+                            self.theme.success
+                        },
                     ),
                 ]),
             ]
@@ -160,7 +201,12 @@ fn render_sparkline(timeline: &[crate::types::TimelineBucket]) -> String {
     }
 
     let chars = ['▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
-    let max_requests = timeline.iter().map(|b| b.requests).max().unwrap_or(1).max(1);
+    let max_requests = timeline
+        .iter()
+        .map(|b| b.requests)
+        .max()
+        .unwrap_or(1)
+        .max(1);
 
     timeline
         .iter()

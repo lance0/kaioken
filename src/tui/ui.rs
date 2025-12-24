@@ -3,10 +3,10 @@ use crate::tui::widgets::{LatencyWidget, PowerWidget, StatusWidget};
 use crate::tui::{Flavor, Theme};
 use crate::types::{RunPhase, RunState, StatsSnapshot};
 use ratatui::{
+    Frame,
     layout::{Constraint, Direction, Layout, Rect},
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph},
-    Frame,
 };
 use std::time::Duration;
 
@@ -102,9 +102,19 @@ fn render_header(
 
     let time_display = if phase == RunPhase::Warmup && !warmup.is_zero() {
         let warmup_secs = warmup.as_secs();
-        format!("    [warmup {:02}:{:02}]", warmup_secs / 60, warmup_secs % 60)
+        format!(
+            "    [warmup {:02}:{:02}]",
+            warmup_secs / 60,
+            warmup_secs % 60
+        )
     } else {
-        format!("    [{:02}:{:02}/{:02}:{:02}]", elapsed / 60, elapsed % 60, total / 60, total % 60)
+        format!(
+            "    [{:02}:{:02}/{:02}:{:02}]",
+            elapsed / 60,
+            elapsed % 60,
+            total / 60,
+            total % 60
+        )
     };
 
     let header_line = Line::from(vec![

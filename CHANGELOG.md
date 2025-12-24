@@ -49,6 +49,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Stage `target` field is now optional (use `target_rate` for RPS-based stages)
 - Config validation prevents mixing VU-based and rate-based stages
+- **Strict validation** - v1.0.0 includes correctness checks to prevent silent misconfiguration:
+  - `--dry-run` now shows load model info (Open/Closed, Target RPS, Max VUs)
+  - Unknown threshold metrics fail with helpful error listing valid options
+  - Scenario configs without `[target]` fail with explicit message
+  - Compare mode auto-detects CI (non-TTY) and uses professional output
 
 ## [0.9.0] - 2025-12-24
 

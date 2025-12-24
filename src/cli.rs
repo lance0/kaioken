@@ -209,7 +209,10 @@ impl RunArgs {
             .map(|h| {
                 let parts: Vec<&str> = h.splitn(2, ':').collect();
                 if parts.len() != 2 {
-                    return Err(format!("Invalid header format: {}. Expected 'Name: Value'", h));
+                    return Err(format!(
+                        "Invalid header format: {}. Expected 'Name: Value'",
+                        h
+                    ));
                 }
                 Ok((parts[0].trim().to_string(), parts[1].trim().to_string()))
             })

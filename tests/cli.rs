@@ -117,14 +117,7 @@ mod run_validation {
     #[test]
     fn run_dry_run_shows_closed_model() {
         kaioken()
-            .args([
-                "run",
-                "https://example.com",
-                "--dry-run",
-                "-y",
-                "-c",
-                "25",
-            ])
+            .args(["run", "https://example.com", "--dry-run", "-y", "-c", "25"])
             .assert()
             .success()
             .stderr(predicate::str::contains("Load Model:  Closed (VU-driven)"))
@@ -155,7 +148,11 @@ mod compare_validation {
         fs::write(&current, "also not valid").unwrap();
 
         kaioken()
-            .args(["compare", baseline.to_str().unwrap(), current.to_str().unwrap()])
+            .args([
+                "compare",
+                baseline.to_str().unwrap(),
+                current.to_str().unwrap(),
+            ])
             .assert()
             .failure();
     }

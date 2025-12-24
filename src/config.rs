@@ -1,5 +1,8 @@
 use crate::cli::RunArgs;
-use crate::types::{Check, CheckCondition, Extraction, ExtractionSource, LoadConfig, Scenario, Stage, Threshold, ThresholdMetric, ThresholdOp};
+use crate::types::{
+    Check, CheckCondition, Extraction, ExtractionSource, LoadConfig, Scenario, Stage, Threshold,
+    ThresholdMetric, ThresholdOp,
+};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::fs;
@@ -26,8 +29,8 @@ pub struct TomlConfig {
 pub struct StageConfig {
     #[serde(with = "humantime_serde")]
     pub duration: Duration,
-    pub target: Option<u32>,        // VU-based (constant VUs mode)
-    pub target_rate: Option<u32>,   // RPS-based (arrival rate mode)
+    pub target: Option<u32>,      // VU-based (constant VUs mode)
+    pub target_rate: Option<u32>, // RPS-based (arrival rate mode)
 }
 
 /// Threshold configuration - unknown fields are rejected.
@@ -121,8 +124,8 @@ pub struct LoadSettings {
 }
 
 pub fn load_config(path: &Path) -> Result<TomlConfig, String> {
-    let content = fs::read_to_string(path)
-        .map_err(|e| format!("Failed to read config file: {}", e))?;
+    let content =
+        fs::read_to_string(path).map_err(|e| format!("Failed to read config file: {}", e))?;
 
     let content = interpolate_env_vars(&content)?;
 
@@ -135,7 +138,8 @@ pub fn load_config(path: &Path) -> Result<TomlConfig, String> {
                  Valid metrics: p50_latency_ms, p75_latency_ms, p90_latency_ms, p95_latency_ms,\n\
                  p99_latency_ms, p999_latency_ms, mean_latency_ms, max_latency_ms,\n\
                  error_rate, rps, check_pass_rate\n\n\
-                 Error: {}", e
+                 Error: {}",
+                e
             )
         } else {
             format!("Failed to parse config file: {}", e)
@@ -181,19 +185,16 @@ pub fn merge_config(args: &RunArgs, toml: Option<TomlConfig>) -> Result<LoadConf
     let toml = toml.unwrap_or_default();
 
     let has_scenarios = !toml.scenarios.is_empty();
-    let url = args
-        .url
-        .clone()
-        .or(toml.target.url)
-        .ok_or_else(|| {
-            if has_scenarios {
-                "URL is required in [target] section even when using [[scenarios]].\n\
+    let url = args.url.clone().or(toml.target.url).ok_or_else(|| {
+        if has_scenarios {
+            "URL is required in [target] section even when using [[scenarios]].\n\
                  The target URL is used as a fallback and for metadata.\n\
-                 Add: [target]\n      url = \"https://your-api.com\"".to_string()
-            } else {
-                "URL is required. Provide via argument or [target] section in config file.".to_string()
-            }
-        })?;
+                 Add: [target]\n      url = \"https://your-api.com\""
+                .to_string()
+        } else {
+            "URL is required. Provide via argument or [target] section in config file.".to_string()
+        }
+    })?;
 
     let method_str = if args.method != "GET" {
         args.method.clone()
@@ -215,13 +216,17 @@ pub fn merge_config(args: &RunArgs, toml: Option<TomlConfig>) -> Result<LoadConf
 
     // Load body from file if specified
     let body = if let Some(ref path) = args.body_file {
-        Some(fs::read_to_string(path)
-            .map_err(|e| format!("Failed to read body file '{}': {}", path.display(), e))?)
+        Some(
+            fs::read_to_string(path)
+                .map_err(|e| format!("Failed to read body file '{}': {}", path.display(), e))?,
+        )
     } else if let Some(ref body) = args.body {
         Some(body.clone())
     } else if let Some(ref path) = toml.target.body_file {
-        Some(fs::read_to_string(path)
-            .map_err(|e| format!("Failed to read body file '{}': {}", path, e))?)
+        Some(
+            fs::read_to_string(path)
+                .map_err(|e| format!("Failed to read body file '{}': {}", path, e))?,
+        )
     } else {
         toml.target.body
     };
@@ -271,7 +276,9 @@ pub fn merge_config(args: &RunArgs, toml: Option<TomlConfig>) -> Result<LoadConf
     let connect_timeout = if args.connect_timeout != Duration::from_secs(2) {
         args.connect_timeout
     } else {
-        toml.target.connect_timeout.unwrap_or(Duration::from_secs(2))
+        toml.target
+            .connect_timeout
+            .unwrap_or(Duration::from_secs(2))
     };
 
     let insecure = args.insecure || toml.target.insecure;
@@ -306,7 +313,10 @@ pub fn merge_config(args: &RunArgs, toml: Option<TomlConfig>) -> Result<LoadConf
 
     // Validate: can't use arrival_rate with VU-based stages
     if arrival_rate.is_some() && !stages.is_empty() && stages.iter().any(|s| s.target.is_some()) {
-        return Err("Cannot use --arrival-rate with VU-based stages. Use target_rate in stages instead.".to_string());
+        return Err(
+            "Cannot use --arrival-rate with VU-based stages. Use target_rate in stages instead."
+                .to_string(),
+        );
     }
 
     Ok(LoadConfig {
@@ -345,11 +355,10 @@ fn process_scenarios(configs: &[ScenarioConfig]) -> Result<Vec<Scenario>, String
             .clone()
             .unwrap_or_else(|| format!("scenario_{}", i + 1));
 
-        let method: reqwest::Method = cfg
-            .method
-            .to_uppercase()
-            .parse()
-            .map_err(|_| format!("Invalid HTTP method in scenario '{}': {}", name, cfg.method))?;
+        let method: reqwest::Method =
+            cfg.method.to_uppercase().parse().map_err(|_| {
+                format!("Invalid HTTP method in scenario '{}': {}", name, cfg.method)
+            })?;
 
         let headers: Vec<(String, String)> = cfg
             .headers
@@ -462,9 +471,8 @@ fn parse_checks(configs: &[CheckConfig]) -> Result<Vec<Check>, String> {
     let mut checks = Vec::with_capacity(configs.len());
 
     for cfg in configs {
-        let condition = parse_check_condition(&cfg.condition).map_err(|e| {
-            format!("Invalid check condition for '{}': {}", cfg.name, e)
-        })?;
+        let condition = parse_check_condition(&cfg.condition)
+            .map_err(|e| format!("Invalid check condition for '{}': {}", cfg.name, e))?;
 
         checks.push(Check {
             name: cfg.name.clone(),
@@ -498,10 +506,8 @@ fn parse_check_condition(expr: &str) -> Result<CheckCondition, String> {
             let rest = rest.trim();
             if rest.starts_with('[') && rest.ends_with(']') {
                 let inner = &rest[1..rest.len() - 1];
-                let codes: Result<Vec<u16>, _> = inner
-                    .split(',')
-                    .map(|s| s.trim().parse::<u16>())
-                    .collect();
+                let codes: Result<Vec<u16>, _> =
+                    inner.split(',').map(|s| s.trim().parse::<u16>()).collect();
                 let codes = codes.map_err(|_| "Invalid status codes in list")?;
                 return Ok(CheckCondition::StatusIn(codes));
             }
@@ -522,14 +528,17 @@ fn parse_check_condition(expr: &str) -> Result<CheckCondition, String> {
         }
         if let Some(rest) = rest.strip_prefix("matches") {
             let pattern = parse_quoted_string(rest.trim())?;
-            let re = regex_lite::Regex::new(&pattern)
-                .map_err(|e| format!("Invalid regex: {}", e))?;
+            let re =
+                regex_lite::Regex::new(&pattern).map_err(|e| format!("Invalid regex: {}", e))?;
             return Ok(CheckCondition::BodyMatches(re));
         }
         return Err(format!("Unknown body condition: '{}'", expr));
     }
 
-    Err(format!("Unknown condition: '{}'. Expected 'status ...' or 'body ...'", expr))
+    Err(format!(
+        "Unknown condition: '{}'. Expected 'status ...' or 'body ...'",
+        expr
+    ))
 }
 
 fn parse_quoted_string(s: &str) -> Result<String, String> {
@@ -572,7 +581,9 @@ fn process_stages(configs: &[StageConfig]) -> Result<Vec<Stage>, String> {
     let has_vu_stages = stages.iter().any(|s| s.target.is_some());
     let has_rate_stages = stages.iter().any(|s| s.target_rate.is_some());
     if has_vu_stages && has_rate_stages {
-        return Err("Cannot mix VU-based stages (target) with rate-based stages (target_rate)".to_string());
+        return Err(
+            "Cannot mix VU-based stages (target) with rate-based stages (target_rate)".to_string(),
+        );
     }
 
     Ok(stages)
