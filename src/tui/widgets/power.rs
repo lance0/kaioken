@@ -29,58 +29,11 @@ impl<'a> PowerWidget<'a> {
             .borders(Borders::ALL)
             .border_style(self.theme.border);
 
-        let rank = self.flavor.power_rank(self.snapshot.rolling_rps);
-        let rank_style = if self.snapshot.rolling_rps > 9000.0 {
-            self.theme.highlight
-        } else {
-            self.theme.muted
-        };
+        // Different display for arrival rate mode vs closed model
+        let is_arrival_rate_mode = self.snapshot.vus_max > 0;
 
-        let mut lines = vec![
-            Line::from(vec![
-                Span::styled("Rolling RPS: ", self.theme.normal),
-                Span::styled(
-                    format!("{:>8.0}", self.snapshot.rolling_rps),
-                    self.theme.highlight,
-                ),
-                Span::raw("  "),
-                Span::styled(format!("[{}]", rank), rank_style),
-            ]),
-            Line::from(vec![
-                Span::styled("Total:       ", self.theme.normal),
-                Span::styled(
-                    format!("{:>8}", format_number(self.snapshot.total_requests)),
-                    self.theme.normal,
-                ),
-            ]),
-            Line::from(vec![
-                Span::styled("Errors:      ", self.theme.normal),
-                Span::styled(
-                    format!(
-                        "{:>8} ({:.2}%)",
-                        format_number(self.snapshot.failed),
-                        self.snapshot.error_rate * 100.0
-                    ),
-                    if self.snapshot.error_rate > 0.05 {
-                        self.theme.error
-                    } else if self.snapshot.error_rate > 0.01 {
-                        self.theme.warning
-                    } else {
-                        self.theme.success
-                    },
-                ),
-            ]),
-        ];
-
-        // Add load model label and arrival rate metrics
-        if self.snapshot.vus_max > 0 {
-            // Open model (arrival rate)
-            lines.push(Line::from(vec![
-                Span::styled("Load Model:  ", self.theme.normal),
-                Span::styled("Open (arrival rate)", self.theme.muted),
-            ]));
-
-            // Show target vs achieved rate
+        let mut lines = if is_arrival_rate_mode {
+            // Open model (arrival rate) - show achieved vs target
             let achieved_rate = self.snapshot.rolling_rps;
             let target_rate = self.snapshot.target_rate as f64;
             let rate_diff = if target_rate > 0.0 {
@@ -89,42 +42,84 @@ impl<'a> PowerWidget<'a> {
                 0.0
             };
 
-            lines.push(Line::from(vec![
-                Span::styled("Target RPS:  ", self.theme.normal),
-                Span::styled(format!("{:>6}", self.snapshot.target_rate), self.theme.highlight),
-                Span::styled("  Achieved: ", self.theme.normal),
-                Span::styled(
-                    format!("{:>6.0}", achieved_rate),
-                    if rate_diff > 10.0 {
-                        self.theme.warning
-                    } else {
-                        self.theme.success
-                    },
-                ),
-            ]));
+            let rank = self.flavor.power_rank(achieved_rate);
+            let rank_style = if achieved_rate > 9000.0 {
+                self.theme.highlight
+            } else {
+                self.theme.muted
+            };
 
-            lines.push(Line::from(vec![
-                Span::styled("VUs:         ", self.theme.normal),
-                Span::styled(
-                    format!("{:>4}/{:<4}", self.snapshot.vus_active, self.snapshot.vus_max),
-                    if self.snapshot.vus_active >= self.snapshot.vus_max {
-                        self.theme.warning
-                    } else {
-                        self.theme.normal
-                    },
-                ),
-                Span::raw("  "),
-                Span::styled("Dropped: ", self.theme.normal),
-                Span::styled(
-                    format!("{}", self.snapshot.dropped_iterations),
-                    if self.snapshot.dropped_iterations > 0 {
-                        self.theme.error
-                    } else {
-                        self.theme.success
-                    },
-                ),
-            ]));
-        }
+            vec![
+                Line::from(vec![
+                    Span::styled("Load Model:  ", self.theme.normal),
+                    Span::styled("Open (arrival rate)", self.theme.muted),
+                ]),
+                Line::from(vec![
+                    Span::styled("Achieved RPS:", self.theme.normal),
+                    Span::styled(format!("{:>7.0}", achieved_rate), 
+                        if rate_diff > 10.0 { self.theme.warning } else { self.theme.success }),
+                    Span::raw("  "),
+                    Span::styled(format!("[{}]", rank), rank_style),
+                ]),
+                Line::from(vec![
+                    Span::styled("Target RPS:  ", self.theme.normal),
+                    Span::styled(format!("{:>7}", self.snapshot.target_rate), self.theme.highlight),
+                    Span::styled("  Dropped: ", self.theme.normal),
+                    Span::styled(
+                        format!("{}", self.snapshot.dropped_iterations),
+                        if self.snapshot.dropped_iterations > 0 { self.theme.error } else { self.theme.success },
+                    ),
+                ]),
+                Line::from(vec![
+                    Span::styled("VUs:         ", self.theme.normal),
+                    Span::styled(
+                        format!("{:>4}/{:<4}", self.snapshot.vus_active, self.snapshot.vus_max),
+                        if self.snapshot.vus_active >= self.snapshot.vus_max { self.theme.warning } else { self.theme.normal },
+                    ),
+                    Span::styled("  Errors: ", self.theme.normal),
+                    Span::styled(
+                        format!("{:.2}%", self.snapshot.error_rate * 100.0),
+                        if self.snapshot.error_rate > 0.05 { self.theme.error }
+                        else if self.snapshot.error_rate > 0.01 { self.theme.warning }
+                        else { self.theme.success },
+                    ),
+                ]),
+                Line::from(vec![
+                    Span::styled("Total:       ", self.theme.normal),
+                    Span::styled(format!("{:>7}", format_number(self.snapshot.total_requests)), self.theme.normal),
+                ]),
+            ]
+        } else {
+            // Closed model (VU-driven) - original display
+            let rank = self.flavor.power_rank(self.snapshot.rolling_rps);
+            let rank_style = if self.snapshot.rolling_rps > 9000.0 {
+                self.theme.highlight
+            } else {
+                self.theme.muted
+            };
+
+            vec![
+                Line::from(vec![
+                    Span::styled("Rolling RPS: ", self.theme.normal),
+                    Span::styled(format!("{:>8.0}", self.snapshot.rolling_rps), self.theme.highlight),
+                    Span::raw("  "),
+                    Span::styled(format!("[{}]", rank), rank_style),
+                ]),
+                Line::from(vec![
+                    Span::styled("Total:       ", self.theme.normal),
+                    Span::styled(format!("{:>8}", format_number(self.snapshot.total_requests)), self.theme.normal),
+                ]),
+                Line::from(vec![
+                    Span::styled("Errors:      ", self.theme.normal),
+                    Span::styled(
+                        format!("{:>8} ({:.2}%)", format_number(self.snapshot.failed), self.snapshot.error_rate * 100.0),
+                        if self.snapshot.error_rate > 0.05 { self.theme.error }
+                        else if self.snapshot.error_rate > 0.01 { self.theme.warning }
+                        else { self.theme.success },
+                    ),
+                ]),
+            ]
+        };
 
         lines.push(Line::from(""));
         lines.push(Line::from(Span::styled(

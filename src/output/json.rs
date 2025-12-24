@@ -101,7 +101,15 @@ pub struct Summary {
     pub requests_per_sec: f64,
     pub bytes_received: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub dropped_iterations: Option<u64>,
+    pub arrival_rate: Option<ArrivalRateSummary>,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct ArrivalRateSummary {
+    pub target_rps: u32,
+    pub achieved_rps: f64,
+    pub max_vus: u32,
+    pub dropped_iterations: u64,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -254,8 +262,13 @@ pub fn create_output(
             error_rate: snapshot.error_rate,
             requests_per_sec: snapshot.requests_per_sec,
             bytes_received: snapshot.bytes_received,
-            dropped_iterations: if snapshot.dropped_iterations > 0 || config.arrival_rate.is_some() {
-                Some(snapshot.dropped_iterations)
+            arrival_rate: if config.arrival_rate.is_some() {
+                Some(ArrivalRateSummary {
+                    target_rps: config.arrival_rate.unwrap_or(0),
+                    achieved_rps: snapshot.requests_per_sec,
+                    max_vus: config.max_vus.unwrap_or(0),
+                    dropped_iterations: snapshot.dropped_iterations,
+                })
             } else {
                 None
             },

@@ -1,4 +1,4 @@
-use crate::output::json::{JsonOutput, Latency, Summary};
+use crate::output::json::{ArrivalRateSummary, JsonOutput, Latency, Summary};
 use crate::types::{LoadConfig, StatsSnapshot};
 use std::fs::File;
 use std::io::{self, BufWriter, Write};
@@ -23,8 +23,13 @@ fn render_html<W: Write>(w: &mut W, snapshot: &StatsSnapshot, config: &LoadConfi
         error_rate: snapshot.error_rate,
         requests_per_sec: snapshot.requests_per_sec,
         bytes_received: snapshot.bytes_received,
-        dropped_iterations: if snapshot.dropped_iterations > 0 || config.arrival_rate.is_some() {
-            Some(snapshot.dropped_iterations)
+        arrival_rate: if config.arrival_rate.is_some() {
+            Some(ArrivalRateSummary {
+                target_rps: config.arrival_rate.unwrap_or(0),
+                achieved_rps: snapshot.requests_per_sec,
+                max_vus: config.max_vus.unwrap_or(0),
+                dropped_iterations: snapshot.dropped_iterations,
+            })
         } else {
             None
         },
