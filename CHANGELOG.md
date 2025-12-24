@@ -37,7 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ```
 - **Automatic VU scaling** - VUs spawn on-demand to maintain target rate
 - **Dropped iteration tracking** - Metric for when max VUs can't sustain the rate
-- **TUI arrival rate display** - Shows VUs active/max and dropped iterations in real-time
+- **TUI arrival rate display** - Shows target vs achieved RPS, VUs active/max, dropped iterations
 - New CLI flags: `--arrival-rate` and `--max-vus`
 
 ### Changed
