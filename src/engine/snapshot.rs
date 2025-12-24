@@ -3,7 +3,7 @@ use crate::types::StatsSnapshot;
 use std::collections::HashMap;
 
 pub fn create_snapshot(stats: &Stats) -> StatsSnapshot {
-    create_snapshot_with_arrival_rate(stats, 0, 0, 0)
+    create_snapshot_with_arrival_rate(stats, 0, 0, 0, 0)
 }
 
 pub fn create_snapshot_with_arrival_rate(
@@ -11,6 +11,7 @@ pub fn create_snapshot_with_arrival_rate(
     dropped_iterations: u64,
     vus_active: u32,
     vus_max: u32,
+    target_rate: u32,
 ) -> StatsSnapshot {
     StatsSnapshot {
         elapsed: stats.elapsed(),
@@ -42,5 +43,6 @@ pub fn create_snapshot_with_arrival_rate(
         dropped_iterations,
         vus_active,
         vus_max,
+        target_rate,
     }
 }

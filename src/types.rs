@@ -276,6 +276,7 @@ pub struct StatsSnapshot {
     pub dropped_iterations: u64,
     pub vus_active: u32,
     pub vus_max: u32,
+    pub target_rate: u32,  // Target RPS (0 = not in arrival rate mode)
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]

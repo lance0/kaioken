@@ -74,6 +74,29 @@ impl<'a> PowerWidget<'a> {
 
         // Add arrival rate metrics if in arrival rate mode
         if self.snapshot.vus_max > 0 {
+            // Show target vs achieved rate
+            let achieved_rate = self.snapshot.rolling_rps;
+            let target_rate = self.snapshot.target_rate as f64;
+            let rate_diff = if target_rate > 0.0 {
+                ((achieved_rate - target_rate) / target_rate * 100.0).abs()
+            } else {
+                0.0
+            };
+
+            lines.push(Line::from(vec![
+                Span::styled("Target RPS:  ", self.theme.normal),
+                Span::styled(format!("{:>6}", self.snapshot.target_rate), self.theme.highlight),
+                Span::styled("  Achieved: ", self.theme.normal),
+                Span::styled(
+                    format!("{:>6.0}", achieved_rate),
+                    if rate_diff > 10.0 {
+                        self.theme.warning
+                    } else {
+                        self.theme.success
+                    },
+                ),
+            ]));
+
             lines.push(Line::from(vec![
                 Span::styled("VUs:         ", self.theme.normal),
                 Span::styled(

@@ -180,6 +180,15 @@ impl Engine {
         // Create shared metric references for arrival rate tracking
         let dropped_ref = Arc::new(AtomicU64::new(0));
         let vus_active_ref = Arc::new(AtomicU32::new(0));
+        let target_rate_ref = Arc::new(AtomicU32::new(0));
+
+        // Determine initial target rate
+        let initial_target_rate = if has_rate_stages {
+            self.config.stages.first().and_then(|s| s.target_rate).unwrap_or(0)
+        } else {
+            self.config.arrival_rate.unwrap_or(0)
+        };
+        target_rate_ref.store(initial_target_rate, Ordering::Relaxed);
 
         // Create aggregator with arrival rate metrics
         let aggregator = Aggregator::with_arrival_rate_metrics(
@@ -193,6 +202,7 @@ impl Engine {
             Some(dropped_ref.clone()),
             Some(vus_active_ref.clone()),
             max_vus,
+            initial_target_rate,
         );
         let aggregator_handle = tokio::spawn(aggregator.run());
 

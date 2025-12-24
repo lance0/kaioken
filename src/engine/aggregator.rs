@@ -20,6 +20,7 @@ pub struct Aggregator {
     dropped_iterations: Option<Arc<AtomicU64>>,
     vus_active: Option<Arc<AtomicU32>>,
     vus_max: u32,
+    target_rate: u32,
 }
 
 impl Aggregator {
@@ -43,6 +44,7 @@ impl Aggregator {
             None,
             None,
             0,
+            0,
         )
     }
 
@@ -58,6 +60,7 @@ impl Aggregator {
         dropped_iterations: Option<Arc<AtomicU64>>,
         vus_active: Option<Arc<AtomicU32>>,
         vus_max: u32,
+        target_rate: u32,
     ) -> Self {
         let in_warmup = !warmup_duration.is_zero();
         if !in_warmup {
@@ -77,6 +80,7 @@ impl Aggregator {
             dropped_iterations,
             vus_active,
             vus_max,
+            target_rate,
         }
     }
 
@@ -143,7 +147,7 @@ impl Aggregator {
                 .as_ref()
                 .map(|v| v.load(Ordering::Relaxed))
                 .unwrap_or(0);
-            create_snapshot_with_arrival_rate(&self.stats, dropped, active, self.vus_max)
+            create_snapshot_with_arrival_rate(&self.stats, dropped, active, self.vus_max, self.target_rate)
         } else {
             create_snapshot(&self.stats)
         };
