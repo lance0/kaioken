@@ -1,5 +1,7 @@
-use crate::engine::{create_snapshot, Stats};
+use crate::engine::{create_snapshot, create_snapshot_with_arrival_rate, Stats};
 use crate::types::{RequestResult, RunPhase, StatsSnapshot};
+use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::{mpsc, watch};
 use tokio_util::sync::CancellationToken;
@@ -14,6 +16,10 @@ pub struct Aggregator {
     warmup_complete: bool,
     max_requests: u64,
     cancel_token: CancellationToken,
+    // Arrival rate metrics (optional)
+    dropped_iterations: Option<Arc<AtomicU64>>,
+    vus_active: Option<Arc<AtomicU32>>,
+    vus_max: u32,
 }
 
 impl Aggregator {
@@ -25,6 +31,33 @@ impl Aggregator {
         phase_tx: watch::Sender<RunPhase>,
         max_requests: u64,
         cancel_token: CancellationToken,
+    ) -> Self {
+        Self::with_arrival_rate_metrics(
+            duration,
+            result_rx,
+            snapshot_tx,
+            warmup_duration,
+            phase_tx,
+            max_requests,
+            cancel_token,
+            None,
+            None,
+            0,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn with_arrival_rate_metrics(
+        duration: Duration,
+        result_rx: mpsc::Receiver<RequestResult>,
+        snapshot_tx: watch::Sender<StatsSnapshot>,
+        warmup_duration: Duration,
+        phase_tx: watch::Sender<RunPhase>,
+        max_requests: u64,
+        cancel_token: CancellationToken,
+        dropped_iterations: Option<Arc<AtomicU64>>,
+        vus_active: Option<Arc<AtomicU32>>,
+        vus_max: u32,
     ) -> Self {
         let in_warmup = !warmup_duration.is_zero();
         if !in_warmup {
@@ -41,6 +74,9 @@ impl Aggregator {
             warmup_complete: !in_warmup,
             max_requests,
             cancel_token,
+            dropped_iterations,
+            vus_active,
+            vus_max,
         }
     }
 
@@ -98,7 +134,19 @@ impl Aggregator {
     }
 
     fn send_snapshot(&self) {
-        let snapshot = create_snapshot(&self.stats);
+        let snapshot = if self.dropped_iterations.is_some() || self.vus_active.is_some() {
+            let dropped = self.dropped_iterations
+                .as_ref()
+                .map(|d| d.load(Ordering::Relaxed))
+                .unwrap_or(0);
+            let active = self.vus_active
+                .as_ref()
+                .map(|v| v.load(Ordering::Relaxed))
+                .unwrap_or(0);
+            create_snapshot_with_arrival_rate(&self.stats, dropped, active, self.vus_max)
+        } else {
+            create_snapshot(&self.stats)
+        };
         let _ = self.snapshot_tx.send(snapshot);
     }
 }

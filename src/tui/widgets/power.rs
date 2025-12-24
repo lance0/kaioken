@@ -36,7 +36,7 @@ impl<'a> PowerWidget<'a> {
             self.theme.muted
         };
 
-        let lines = vec![
+        let mut lines = vec![
             Line::from(vec![
                 Span::styled("Rolling RPS: ", self.theme.normal),
                 Span::styled(
@@ -70,12 +70,38 @@ impl<'a> PowerWidget<'a> {
                     },
                 ),
             ]),
-            Line::from(""),
-            Line::from(Span::styled(
-                render_sparkline(&self.snapshot.timeline),
-                self.theme.muted,
-            )),
         ];
+
+        // Add arrival rate metrics if in arrival rate mode
+        if self.snapshot.vus_max > 0 {
+            lines.push(Line::from(vec![
+                Span::styled("VUs:         ", self.theme.normal),
+                Span::styled(
+                    format!("{:>4}/{:<4}", self.snapshot.vus_active, self.snapshot.vus_max),
+                    if self.snapshot.vus_active >= self.snapshot.vus_max {
+                        self.theme.warning
+                    } else {
+                        self.theme.normal
+                    },
+                ),
+                Span::raw("  "),
+                Span::styled("Dropped: ", self.theme.normal),
+                Span::styled(
+                    format!("{}", self.snapshot.dropped_iterations),
+                    if self.snapshot.dropped_iterations > 0 {
+                        self.theme.error
+                    } else {
+                        self.theme.success
+                    },
+                ),
+            ]));
+        }
+
+        lines.push(Line::from(""));
+        lines.push(Line::from(Span::styled(
+            render_sparkline(&self.snapshot.timeline),
+            self.theme.muted,
+        )));
 
         let paragraph = Paragraph::new(lines).block(block);
         frame.render_widget(paragraph, area);

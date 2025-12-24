@@ -149,18 +149,6 @@ impl Engine {
             self.config.warmup + self.config.duration
         };
 
-        // Create aggregator
-        let aggregator = Aggregator::new(
-            total_duration,
-            result_rx,
-            self.snapshot_tx.clone(),
-            self.config.warmup,
-            self.phase_tx.clone(),
-            self.config.max_requests,
-            self.cancel_token.clone(),
-        );
-        let aggregator_handle = tokio::spawn(aggregator.run());
-
         let scenarios = Arc::new(self.config.scenarios.clone());
         let checks = Arc::new(self.config.checks.clone());
 
@@ -189,8 +177,27 @@ impl Engine {
             None
         };
 
-        // Create appropriate executor based on configuration
-        let (dropped_ref, vus_active_ref, executor_handle) = if has_rate_stages {
+        // Create shared metric references for arrival rate tracking
+        let dropped_ref = Arc::new(AtomicU64::new(0));
+        let vus_active_ref = Arc::new(AtomicU32::new(0));
+
+        // Create aggregator with arrival rate metrics
+        let aggregator = Aggregator::with_arrival_rate_metrics(
+            total_duration,
+            result_rx,
+            self.snapshot_tx.clone(),
+            self.config.warmup,
+            self.phase_tx.clone(),
+            self.config.max_requests,
+            self.cancel_token.clone(),
+            Some(dropped_ref.clone()),
+            Some(vus_active_ref.clone()),
+            max_vus,
+        );
+        let aggregator_handle = tokio::spawn(aggregator.run());
+
+        // Create and spawn appropriate executor based on configuration
+        let executor_handle = if has_rate_stages {
             // Use ramping arrival rate executor with stages
             let rate_stages: Vec<RateStage> = self.config.stages.iter()
                 .filter_map(|s| s.target_rate.map(|rate| RateStage {
@@ -218,10 +225,29 @@ impl Engine {
                 self.cancel_token.clone(),
             );
 
-            let dropped = executor.dropped_iterations();
-            let active = executor.vus_active();
-            let handle = tokio::spawn(async move { executor.run().await });
-            (dropped, active, handle)
+            // Link our shared metrics to executor's metrics
+            let exec_dropped = executor.dropped_iterations();
+            let exec_active = executor.vus_active();
+            let dropped_clone = dropped_ref.clone();
+            let active_clone = vus_active_ref.clone();
+
+            tokio::spawn(async move {
+                // Spawn a task to sync metrics periodically
+                let sync_dropped = dropped_clone;
+                let sync_active = active_clone;
+                let sync_exec_dropped = exec_dropped.clone();
+                let sync_exec_active = exec_active.clone();
+                
+                tokio::spawn(async move {
+                    loop {
+                        sync_dropped.store(sync_exec_dropped.load(Ordering::Relaxed), Ordering::Relaxed);
+                        sync_active.store(sync_exec_active.load(Ordering::Relaxed), Ordering::Relaxed);
+                        tokio::time::sleep(Duration::from_millis(50)).await;
+                    }
+                });
+                
+                executor.run().await;
+            })
         } else {
             // Use constant arrival rate executor
             let arrival_rate = self.config.arrival_rate.unwrap_or(10);
@@ -244,10 +270,29 @@ impl Engine {
                 self.cancel_token.clone(),
             );
 
-            let dropped = executor.dropped_iterations();
-            let active = executor.vus_active();
-            let handle = tokio::spawn(async move { executor.run().await });
-            (dropped, active, handle)
+            // Link our shared metrics to executor's metrics
+            let exec_dropped = executor.dropped_iterations();
+            let exec_active = executor.vus_active();
+            let dropped_clone = dropped_ref.clone();
+            let active_clone = vus_active_ref.clone();
+
+            tokio::spawn(async move {
+                // Spawn a task to sync metrics periodically
+                let sync_dropped = dropped_clone;
+                let sync_active = active_clone;
+                let sync_exec_dropped = exec_dropped.clone();
+                let sync_exec_active = exec_active.clone();
+                
+                tokio::spawn(async move {
+                    loop {
+                        sync_dropped.store(sync_exec_dropped.load(Ordering::Relaxed), Ordering::Relaxed);
+                        sync_active.store(sync_exec_active.load(Ordering::Relaxed), Ordering::Relaxed);
+                        tokio::time::sleep(Duration::from_millis(50)).await;
+                    }
+                });
+                
+                executor.run().await;
+            })
         };
 
         // Spawn fail-fast threshold checker if enabled
