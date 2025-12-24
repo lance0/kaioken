@@ -1,5 +1,5 @@
 use crate::engine::aggregator::Aggregator;
-use crate::engine::arrival_rate::ArrivalRateExecutor;
+use crate::engine::arrival_rate::{ArrivalRateExecutor, RampingArrivalRateExecutor, RateStage};
 use crate::engine::scheduler::{RampUpScheduler, RateLimiter, StageInfo, StagesScheduler};
 use crate::engine::thresholds::evaluate_thresholds;
 use crate::engine::worker::{CheckResult, Worker};
@@ -120,8 +120,10 @@ impl Engine {
     }
 
     async fn run_arrival_rate_mode(self) -> Result<Stats, String> {
+        let max_vus = self.config.max_vus.unwrap_or(100);
+        
         let client = create_client(
-            self.config.max_vus.unwrap_or(100),
+            max_vus,
             self.config.timeout,
             self.config.connect_timeout,
             self.config.insecure,
@@ -130,10 +132,6 @@ impl Engine {
         )
         .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
 
-        let arrival_rate = self.config.arrival_rate.unwrap_or(10);
-        let max_vus = self.config.max_vus.unwrap_or(100);
-        let pre_allocated_vus = (arrival_rate / 10).max(1).min(max_vus); // Start with ~10% of rate
-
         self.vus_max.store(max_vus, Ordering::Relaxed);
 
         let (result_tx, result_rx) = mpsc::channel::<RequestResult>(RESULT_CHANNEL_SIZE);
@@ -141,8 +139,17 @@ impl Engine {
         let _ = self.state_tx.send(RunState::Running);
         let _ = self.phase_tx.send(RunPhase::Running);
 
+        // Check if we have rate-based stages
+        let has_rate_stages = self.config.stages.iter().any(|s| s.target_rate.is_some());
+        
+        // Calculate total duration
+        let total_duration = if has_rate_stages {
+            self.config.warmup + self.config.stages.iter().map(|s| s.duration).sum::<Duration>()
+        } else {
+            self.config.warmup + self.config.duration
+        };
+
         // Create aggregator
-        let total_duration = self.config.warmup + self.config.duration;
         let aggregator = Aggregator::new(
             total_duration,
             result_rx,
@@ -182,27 +189,66 @@ impl Engine {
             None
         };
 
-        // Create and run the arrival rate executor
-        let executor = ArrivalRateExecutor::new(
-            arrival_rate,
-            self.config.duration,
-            max_vus,
-            pre_allocated_vus,
-            client,
-            self.config.url.clone(),
-            self.config.method.clone(),
-            self.config.headers.clone(),
-            self.config.body.clone(),
-            scenarios,
-            checks,
-            result_tx,
-            check_tx,
-            self.cancel_token.clone(),
-        );
+        // Create appropriate executor based on configuration
+        let (dropped_ref, vus_active_ref, executor_handle) = if has_rate_stages {
+            // Use ramping arrival rate executor with stages
+            let rate_stages: Vec<RateStage> = self.config.stages.iter()
+                .filter_map(|s| s.target_rate.map(|rate| RateStage {
+                    duration: s.duration,
+                    target_rate: rate,
+                }))
+                .collect();
+            
+            let max_rate = rate_stages.iter().map(|s| s.target_rate).max().unwrap_or(10);
+            let pre_allocated_vus = (max_rate / 10).max(1).min(max_vus);
 
-        // Store references to metrics
-        let dropped_ref = executor.dropped_iterations();
-        let vus_active_ref = executor.vus_active();
+            let executor = RampingArrivalRateExecutor::new(
+                rate_stages,
+                max_vus,
+                pre_allocated_vus,
+                client,
+                self.config.url.clone(),
+                self.config.method.clone(),
+                self.config.headers.clone(),
+                self.config.body.clone(),
+                scenarios,
+                checks,
+                result_tx,
+                check_tx,
+                self.cancel_token.clone(),
+            );
+
+            let dropped = executor.dropped_iterations();
+            let active = executor.vus_active();
+            let handle = tokio::spawn(async move { executor.run().await });
+            (dropped, active, handle)
+        } else {
+            // Use constant arrival rate executor
+            let arrival_rate = self.config.arrival_rate.unwrap_or(10);
+            let pre_allocated_vus = (arrival_rate / 10).max(1).min(max_vus);
+
+            let executor = ArrivalRateExecutor::new(
+                arrival_rate,
+                self.config.duration,
+                max_vus,
+                pre_allocated_vus,
+                client,
+                self.config.url.clone(),
+                self.config.method.clone(),
+                self.config.headers.clone(),
+                self.config.body.clone(),
+                scenarios,
+                checks,
+                result_tx,
+                check_tx,
+                self.cancel_token.clone(),
+            );
+
+            let dropped = executor.dropped_iterations();
+            let active = executor.vus_active();
+            let handle = tokio::spawn(async move { executor.run().await });
+            (dropped, active, handle)
+        };
 
         // Spawn fail-fast threshold checker if enabled
         let fail_fast_handle = if self.config.fail_fast && !self.config.thresholds.is_empty() {
@@ -217,13 +263,8 @@ impl Engine {
             None
         };
 
-        // Run the executor
-        let cancel_token = self.cancel_token.clone();
-        let executor_handle = tokio::spawn(async move {
-            executor.run().await;
-        });
-
         // Wait for duration or cancellation
+        let cancel_token = self.cancel_token.clone();
         tokio::select! {
             _ = sleep(total_duration) => {
                 tracing::info!("Duration elapsed, stopping");

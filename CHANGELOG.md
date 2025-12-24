@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.9.1] - 2025-12-24
+## [1.0.0] - 2025-12-24
 
 ### Added
 
@@ -21,13 +21,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   max_vus = 200       # Auto-scale VUs up to this limit
   duration = "5m"
   ```
+- **Ramping arrival rate** - RPS-based stages with gradual transitions:
+  ```toml
+  [[stages]]
+  duration = "1m"
+  target_rate = 100   # Ramp to 100 RPS
+  
+  [[stages]]
+  duration = "5m"
+  target_rate = 500   # Ramp to 500 RPS
+  
+  [[stages]]
+  duration = "1m"
+  target_rate = 0     # Ramp down
+  ```
 - **Automatic VU scaling** - VUs spawn on-demand to maintain target rate
 - **Dropped iteration tracking** - Metric for when max VUs can't sustain the rate
 - New CLI flags: `--arrival-rate` and `--max-vus`
 
 ### Changed
 
-- Stage `target` field is now optional (prep for ramping arrival rate in v1.0)
+- Stage `target` field is now optional (use `target_rate` for RPS-based stages)
 - Config validation prevents mixing VU-based and rate-based stages
 
 ## [0.9.0] - 2025-12-24

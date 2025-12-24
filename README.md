@@ -208,8 +208,6 @@ Generate load at a fixed RPS regardless of response times. VUs scale automatical
 ```bash
 # CLI: 100 RPS with up to 50 VUs
 kaioken run --arrival-rate 100 --max-vus 50 -d 1m https://api.example.com
-
-# Config file
 ```
 
 ```toml
@@ -217,6 +215,27 @@ kaioken run --arrival-rate 100 --max-vus 50 -d 1m https://api.example.com
 arrival_rate = 100  # Target: 100 requests/second
 max_vus = 200       # Max concurrent VUs (auto-scales)
 duration = "5m"
+```
+
+### Ramping Arrival Rate (Stages)
+
+Use `target_rate` in stages for RPS-based load profiles:
+
+```toml
+[load]
+max_vus = 200
+
+[[stages]]
+duration = "1m"
+target_rate = 50    # Ramp up to 50 RPS
+
+[[stages]]
+duration = "5m"
+target_rate = 200   # Ramp to 200 RPS
+
+[[stages]]
+duration = "1m"
+target_rate = 0     # Ramp down
 ```
 
 **How it works:**
