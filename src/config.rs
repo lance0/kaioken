@@ -26,7 +26,8 @@ pub struct TomlConfig {
 pub struct StageConfig {
     #[serde(with = "humantime_serde")]
     pub duration: Duration,
-    pub target: u32,
+    pub target: Option<u32>,        // VU-based (constant VUs mode)
+    pub target_rate: Option<u32>,   // RPS-based (arrival rate mode)
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -260,13 +261,26 @@ pub fn merge_config(args: &RunArgs, toml: Option<TomlConfig>) -> Result<LoadConf
     let checks = parse_checks(&toml.checks)?;
 
     // Process stages
-    let stages = process_stages(&toml.stages);
+    let stages = process_stages(&toml.stages)?;
 
     // Think time - CLI takes precedence
     let think_time = args.think_time.or(toml.load.think_time);
 
     // Fail fast
     let fail_fast = args.fail_fast;
+
+    // Arrival rate mode - CLI takes precedence
+    let arrival_rate = args.arrival_rate.or(toml.load.arrival_rate);
+    let max_vus = if args.max_vus != 100 {
+        Some(args.max_vus)
+    } else {
+        toml.load.max_vus.or(Some(100))
+    };
+
+    // Validate: can't use arrival_rate with VU-based stages
+    if arrival_rate.is_some() && !stages.is_empty() && stages.iter().any(|s| s.target.is_some()) {
+        return Err("Cannot use --arrival-rate with VU-based stages. Use target_rate in stages instead.".to_string());
+    }
 
     Ok(LoadConfig {
         url,
@@ -290,8 +304,8 @@ pub fn merge_config(args: &RunArgs, toml: Option<TomlConfig>) -> Result<LoadConf
         stages,
         think_time,
         fail_fast,
-        arrival_rate: toml.load.arrival_rate,
-        max_vus: toml.load.max_vus,
+        arrival_rate,
+        max_vus,
     })
 }
 
@@ -500,12 +514,39 @@ fn parse_quoted_string(s: &str) -> Result<String, String> {
     }
 }
 
-fn process_stages(configs: &[StageConfig]) -> Vec<Stage> {
-    configs
-        .iter()
-        .map(|cfg| Stage {
+fn process_stages(configs: &[StageConfig]) -> Result<Vec<Stage>, String> {
+    let mut stages = Vec::with_capacity(configs.len());
+
+    for (i, cfg) in configs.iter().enumerate() {
+        // Validate: can't have both target and target_rate
+        if cfg.target.is_some() && cfg.target_rate.is_some() {
+            return Err(format!(
+                "Stage {} cannot have both 'target' (VUs) and 'target_rate' (RPS)",
+                i + 1
+            ));
+        }
+
+        // Validate: must have at least one
+        if cfg.target.is_none() && cfg.target_rate.is_none() {
+            return Err(format!(
+                "Stage {} must have either 'target' (VUs) or 'target_rate' (RPS)",
+                i + 1
+            ));
+        }
+
+        stages.push(Stage {
             duration: cfg.duration,
             target: cfg.target,
-        })
-        .collect()
+            target_rate: cfg.target_rate,
+        });
+    }
+
+    // Validate: all stages must use the same mode
+    let has_vu_stages = stages.iter().any(|s| s.target.is_some());
+    let has_rate_stages = stages.iter().any(|s| s.target_rate.is_some());
+    if has_vu_stages && has_rate_stages {
+        return Err("Cannot mix VU-based stages (target) with rate-based stages (target_rate)".to_string());
+    }
+
+    Ok(stages)
 }

@@ -137,7 +137,10 @@ pub struct StagesScheduler {
 
 impl StagesScheduler {
     pub fn new(stages: Vec<Stage>, max_concurrency: u32) -> (Self, watch::Receiver<StageInfo>) {
-        let initial_target = stages.first().map(|s| s.target).unwrap_or(max_concurrency);
+        let initial_target = stages
+            .first()
+            .and_then(|s| s.target)
+            .unwrap_or(max_concurrency);
         let initial_permits = initial_target.min(1) as usize; // Start with at least 1
 
         let (stage_info_tx, stage_info_rx) = watch::channel(StageInfo {
@@ -179,11 +182,19 @@ impl StagesScheduler {
             return;
         }
 
-        let mut current_workers: u32 = self.stages.first().map(|s| s.target.min(1)).unwrap_or(1);
+        let mut current_workers: u32 = self.stages
+            .first()
+            .and_then(|s| s.target)
+            .map(|t| t.min(1))
+            .unwrap_or(1);
         let mut stage_start = Instant::now();
 
         for (stage_idx, stage) in self.stages.iter().enumerate() {
-            let target = stage.target;
+            // Skip stages without VU target (they're arrival rate stages)
+            let target = match stage.target {
+                Some(t) => t,
+                None => continue,
+            };
             self.current_target.store(target, Ordering::Relaxed);
 
             // Calculate ramp rate: how often to add/remove a worker
@@ -228,16 +239,18 @@ impl StagesScheduler {
             stage_start = Instant::now();
         }
 
-        // Final stage info update
+        // Final stage info update - only for VU-based stages
         if let Some(last) = self.stages.last() {
-            let _ = self.stage_info_tx.send(StageInfo {
-                stage_index: self.stages.len() - 1,
-                stage_count: self.stages.len(),
-                target: last.target,
-                current: last.target,
-                stage_elapsed: last.duration,
-                stage_duration: last.duration,
-            });
+            if let Some(target) = last.target {
+                let _ = self.stage_info_tx.send(StageInfo {
+                    stage_index: self.stages.len() - 1,
+                    stage_count: self.stages.len(),
+                    target,
+                    current: target,
+                    stage_elapsed: last.duration,
+                    stage_duration: last.duration,
+                });
+            }
         }
     }
 }

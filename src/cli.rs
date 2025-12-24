@@ -112,6 +112,14 @@ pub struct RunArgs {
     #[arg(long)]
     pub cookie_jar: bool,
 
+    /// Target arrival rate in requests/second (enables arrival rate mode)
+    #[arg(long)]
+    pub arrival_rate: Option<u32>,
+
+    /// Maximum VUs for arrival rate mode (default: 100)
+    #[arg(long, default_value = "100")]
+    pub max_vus: u32,
+
     /// Config file path (TOML)
     #[arg(short = 'f', long = "config")]
     pub config: Option<PathBuf>,

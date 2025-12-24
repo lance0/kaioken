@@ -9,7 +9,8 @@ use std::time::Duration;
 #[derive(Debug, Clone)]
 pub struct Stage {
     pub duration: Duration,
-    pub target: u32,
+    pub target: Option<u32>,       // VU-based target (constant VUs mode)
+    pub target_rate: Option<u32>,  // RPS-based target (arrival rate mode)
 }
 
 // ============================================================================
@@ -270,6 +271,11 @@ pub struct StatsSnapshot {
 
     pub check_stats: HashMap<String, CheckStats>,
     pub overall_check_pass_rate: Option<f64>,
+
+    // Arrival rate metrics
+    pub dropped_iterations: u64,
+    pub vus_active: u32,
+    pub vus_max: u32,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]

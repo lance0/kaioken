@@ -223,11 +223,21 @@ async fn run_load_test(args: &RunArgs) -> Result<i32, String> {
         }
         if !config.stages.is_empty() {
             let total: std::time::Duration = config.stages.iter().map(|s| s.duration).sum();
-            let max_target = config.stages.iter().map(|s| s.target).max().unwrap_or(0);
-            eprintln!("Stages:      {} defined (total: {:?}, max workers: {})", 
-                config.stages.len(), total, max_target);
+            let max_target = config.stages.iter().filter_map(|s| s.target).max().unwrap_or(0);
+            let max_rate = config.stages.iter().filter_map(|s| s.target_rate).max();
+            if let Some(rate) = max_rate {
+                eprintln!("Stages:      {} defined (total: {:?}, max rate: {} RPS)", 
+                    config.stages.len(), total, rate);
+            } else {
+                eprintln!("Stages:      {} defined (total: {:?}, max workers: {})", 
+                    config.stages.len(), total, max_target);
+            }
             for (i, s) in config.stages.iter().enumerate() {
-                eprintln!("  {}. {:?} -> {} workers", i + 1, s.duration, s.target);
+                if let Some(target) = s.target {
+                    eprintln!("  {}. {:?} -> {} workers", i + 1, s.duration, target);
+                } else if let Some(rate) = s.target_rate {
+                    eprintln!("  {}. {:?} -> {} RPS", i + 1, s.duration, rate);
+                }
             }
         }
         return Ok(0);
