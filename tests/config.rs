@@ -367,7 +367,7 @@ check_pass_rate = "> 0.95"
     }
 
     #[test]
-    fn invalid_threshold_metric_warns() {
+    fn invalid_threshold_metric_fails() {
         let dir = tempdir().unwrap();
         let config = dir.path().join("config.toml");
 
@@ -387,11 +387,13 @@ invalid_metric = "< 100"
         )
         .unwrap();
 
-        // Unknown metrics are typically ignored with a warning, not a hard failure
+        // Unknown threshold metrics must fail with helpful error listing valid ones
         kaioken()
             .args(["run", "-f", config.to_str().unwrap(), "--dry-run", "-y"])
             .assert()
-            .success();
+            .failure()
+            .stderr(predicate::str::contains("unknown field"))
+            .stderr(predicate::str::contains("p95_latency_ms"));
     }
 }
 
@@ -466,6 +468,40 @@ condition = 'body matches "\{.*\}"'
             .args(["run", "-f", config.to_str().unwrap(), "--dry-run", "-y"])
             .assert()
             .success();
+    }
+}
+
+mod scenario_without_target {
+    use super::*;
+
+    #[test]
+    fn scenario_only_config_fails_with_explicit_message() {
+        let dir = tempdir().unwrap();
+        let config = dir.path().join("config.toml");
+
+        fs::write(
+            &config,
+            r#"
+[load]
+concurrency = 10
+duration = "10s"
+
+[[scenarios]]
+name = "get_users"
+url = "https://example.com/users"
+method = "GET"
+weight = 1
+"#,
+        )
+        .unwrap();
+
+        // Should fail with explicit message about needing [target]
+        kaioken()
+            .args(["run", "-f", config.to_str().unwrap(), "--dry-run", "-y"])
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("[target]"))
+            .stderr(predicate::str::contains("[[scenarios]]"));
     }
 }
 

@@ -109,6 +109,7 @@ mod basic_comparison {
         fs::write(&baseline, &results).unwrap();
         fs::write(&current, &results).unwrap();
 
+        // In non-TTY (tests), uses serious mode
         kaioken()
             .args([
                 "compare",
@@ -117,7 +118,7 @@ mod basic_comparison {
             ])
             .assert()
             .success()
-            .stdout(predicate::str::contains("stable"));
+            .stdout(predicate::str::contains("No regressions"));
     }
 
     #[test]
@@ -382,6 +383,33 @@ mod threshold_options {
             ])
             .assert()
             .success();
+    }
+}
+
+mod ci_mode {
+    use super::*;
+
+    #[test]
+    fn compare_uses_serious_output_in_non_tty() {
+        let dir = tempdir().unwrap();
+        let baseline = dir.path().join("baseline.json");
+        let current = dir.path().join("current.json");
+
+        let results = create_test_results(1000, 100.0, 0.01, 10000, None, None);
+        fs::write(&baseline, &results).unwrap();
+        fs::write(&current, &results).unwrap();
+
+        // When running in tests (non-TTY), should use serious output
+        // "Comparison Results" instead of "FUSION"
+        kaioken()
+            .args([
+                "compare",
+                baseline.to_str().unwrap(),
+                current.to_str().unwrap(),
+            ])
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("Comparison Results"));
     }
 }
 

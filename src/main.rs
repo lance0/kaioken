@@ -147,7 +147,9 @@ fn run_compare(args: &cli::CompareArgs) -> Result<i32, String> {
     if args.json {
         compare::display::print_comparison_json(&result)?;
     } else {
-        print_comparison(&result, args.serious);
+        // Use serious mode if explicitly requested OR if not a TTY (CI environment)
+        let serious = args.serious || !std::io::IsTerminal::is_terminal(&std::io::stdout());
+        print_comparison(&result, serious);
     }
 
     if result.has_regressions {
@@ -185,7 +187,17 @@ async fn run_load_test(args: &RunArgs) -> Result<i32, String> {
                 );
             }
         }
-        eprintln!("Concurrency: {}", config.concurrency);
+        // Show load model info
+        if config.arrival_rate.is_some() || config.stages.iter().any(|s| s.target_rate.is_some()) {
+            eprintln!("Load Model:  Open (arrival rate)");
+            if let Some(rate) = config.arrival_rate {
+                eprintln!("Target RPS:  {}", rate);
+            }
+            eprintln!("Max VUs:     {}", config.max_vus.unwrap_or(100));
+        } else {
+            eprintln!("Load Model:  Closed (VU-driven)");
+            eprintln!("Concurrency: {}", config.concurrency);
+        }
         eprintln!("Duration:    {:?}", config.duration);
         if config.max_requests > 0 {
             eprintln!("Max Reqs:    {}", config.max_requests);

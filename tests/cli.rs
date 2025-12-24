@@ -109,7 +109,26 @@ mod run_validation {
             ])
             .assert()
             .success()
-            .stderr(predicate::str::contains("Configuration validated"));
+            .stderr(predicate::str::contains("Load Model:  Open (arrival rate)"))
+            .stderr(predicate::str::contains("Target RPS:  100"))
+            .stderr(predicate::str::contains("Max VUs:     50"));
+    }
+
+    #[test]
+    fn run_dry_run_shows_closed_model() {
+        kaioken()
+            .args([
+                "run",
+                "https://example.com",
+                "--dry-run",
+                "-y",
+                "-c",
+                "25",
+            ])
+            .assert()
+            .success()
+            .stderr(predicate::str::contains("Load Model:  Closed (VU-driven)"))
+            .stderr(predicate::str::contains("Concurrency: 25"));
     }
 }
 

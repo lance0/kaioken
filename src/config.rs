@@ -30,7 +30,12 @@ pub struct StageConfig {
     pub target_rate: Option<u32>,   // RPS-based (arrival rate mode)
 }
 
+/// Threshold configuration - unknown fields are rejected.
+/// Valid metrics: p50_latency_ms, p75_latency_ms, p90_latency_ms, p95_latency_ms,
+/// p99_latency_ms, p999_latency_ms, mean_latency_ms, max_latency_ms, error_rate,
+/// rps, check_pass_rate
 #[derive(Debug, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
 pub struct ThresholdsConfig {
     pub p50_latency_ms: Option<String>,
     pub p75_latency_ms: Option<String>,
@@ -121,8 +126,21 @@ pub fn load_config(path: &Path) -> Result<TomlConfig, String> {
 
     let content = interpolate_env_vars(&content)?;
 
-    toml::from_str(&content)
-        .map_err(|e| format!("Failed to parse config file: {}", e))
+    toml::from_str(&content).map_err(|e| {
+        let err_str = e.to_string();
+        // Provide helpful message for unknown threshold metrics
+        if err_str.contains("thresholds") && err_str.contains("unknown field") {
+            format!(
+                "Unknown threshold metric in config file.\n\
+                 Valid metrics: p50_latency_ms, p75_latency_ms, p90_latency_ms, p95_latency_ms,\n\
+                 p99_latency_ms, p999_latency_ms, mean_latency_ms, max_latency_ms,\n\
+                 error_rate, rps, check_pass_rate\n\n\
+                 Error: {}", e
+            )
+        } else {
+            format!("Failed to parse config file: {}", e)
+        }
+    })
 }
 
 fn interpolate_env_vars(content: &str) -> Result<String, String> {
@@ -162,11 +180,20 @@ fn interpolate_env_vars(content: &str) -> Result<String, String> {
 pub fn merge_config(args: &RunArgs, toml: Option<TomlConfig>) -> Result<LoadConfig, String> {
     let toml = toml.unwrap_or_default();
 
+    let has_scenarios = !toml.scenarios.is_empty();
     let url = args
         .url
         .clone()
         .or(toml.target.url)
-        .ok_or("URL is required. Provide via argument or config file.")?;
+        .ok_or_else(|| {
+            if has_scenarios {
+                "URL is required in [target] section even when using [[scenarios]].\n\
+                 The target URL is used as a fallback and for metadata.\n\
+                 Add: [target]\n      url = \"https://your-api.com\"".to_string()
+            } else {
+                "URL is required. Provide via argument or [target] section in config file.".to_string()
+            }
+        })?;
 
     let method_str = if args.method != "GET" {
         args.method.clone()
