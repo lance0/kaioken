@@ -124,7 +124,7 @@ Fast local load testing against HTTP endpoints with zero setup friction, real-ti
 - [x] **Dropped iteration tracking** - Metric when VUs can't keep up with rate
 - [x] **Auto VU scaling** - Dynamically spawn/retire VUs to maintain rate
 - [x] CLI flags: `--arrival-rate` and `--max-vus`
-- [ ] TUI display for arrival rate metrics (future enhancement)
+- [x] TUI display for VUs active/max and dropped iterations
 
 ### v1.1 — WebSocket Support
 
