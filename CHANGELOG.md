@@ -40,6 +40,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **TUI arrival rate display** - Shows load model, target vs achieved RPS, VUs, dropped iterations
 - New CLI flags: `--arrival-rate` and `--max-vus`
 - JSON/HTML output includes `load_model`, `arrival_rate`, `max_vus`, `dropped_iterations`
+- **Compare mode guardrails** - Prevents bogus open vs closed model comparisons:
+  - Prints load model metadata for both baseline and candidate
+  - Fails (exit 5) when comparing Open vs Closed runs unless `--force`
+  - Warns on parameter differences (target_rps, max_vus, concurrency)
 
 ### Changed
 

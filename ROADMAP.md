@@ -197,7 +197,8 @@ Critical for microservices architectures.
 | 0 | Success |
 | 1 | Error (high error rate, config issues) |
 | 3 | Regressions detected (compare mode) |
-| 4 | Thresholds failed (v0.6+) |
+| 4 | Thresholds failed |
+| 5 | Load model mismatch in compare (without --force) |
 
 ---
 

@@ -125,7 +125,7 @@ kaioken run [OPTIONS] [URL]
 kaioken compare <BASELINE> <CURRENT> [OPTIONS]
 ```
 
-Compare two JSON result files for regressions. Exits with code 3 if regressions detected.
+Compare two JSON result files for regressions. Prints load model metadata and validates compatibility.
 
 | Flag | Default | Description |
 |------|---------|-------------|
@@ -133,7 +133,10 @@ Compare two JSON result files for regressions. Exits with code 3 if regressions 
 | `--threshold-p999` | 15.0 | p999 latency regression threshold (%) |
 | `--threshold-error-rate` | 50.0 | Error rate regression threshold (%) |
 | `--threshold-rps` | 10.0 | RPS regression threshold (%) |
+| `--force` | false | Allow comparing different load models (open vs closed) |
 | `--json` | false | Output as JSON |
+
+Exit codes: 0 (success), 3 (regressions), 5 (load model mismatch without --force)
 
 ### `kaioken init`
 
@@ -272,9 +275,10 @@ Operators: `<`, `<=`, `>`, `>=`, `==`
 
 Exit codes:
 - `0` - Success
-- `1` - Error (high error rate)
+- `1` - Error (high error rate, config issues)
 - `3` - Regressions detected (compare mode)
 - `4` - Thresholds failed
+- `5` - Load model mismatch in compare (without --force)
 
 ## Checks
 
