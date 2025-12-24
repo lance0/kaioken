@@ -77,6 +77,12 @@ pub struct Load {
     pub ramp_up_secs: u64,
     pub warmup_secs: u64,
     pub timeout_ms: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub load_model: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub arrival_rate: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_vus: Option<u32>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -94,6 +100,8 @@ pub struct Summary {
     pub error_rate: f64,
     pub requests_per_sec: f64,
     pub bytes_received: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dropped_iterations: Option<u64>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -223,6 +231,13 @@ pub fn create_output(
                 ramp_up_secs: config.ramp_up.as_secs(),
                 warmup_secs: config.warmup.as_secs(),
                 timeout_ms: config.timeout.as_millis() as u64,
+                load_model: if config.arrival_rate.is_some() {
+                    Some("open".to_string())
+                } else {
+                    Some("closed".to_string())
+                },
+                arrival_rate: config.arrival_rate,
+                max_vus: config.max_vus,
             },
             env: Environment {
                 hostname: hostname::get()
@@ -239,6 +254,11 @@ pub fn create_output(
             error_rate: snapshot.error_rate,
             requests_per_sec: snapshot.requests_per_sec,
             bytes_received: snapshot.bytes_received,
+            dropped_iterations: if snapshot.dropped_iterations > 0 || config.arrival_rate.is_some() {
+                Some(snapshot.dropped_iterations)
+            } else {
+                None
+            },
         },
         latency_us: Latency {
             min: snapshot.latency_min_us,

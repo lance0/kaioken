@@ -72,8 +72,14 @@ impl<'a> PowerWidget<'a> {
             ]),
         ];
 
-        // Add arrival rate metrics if in arrival rate mode
+        // Add load model label and arrival rate metrics
         if self.snapshot.vus_max > 0 {
+            // Open model (arrival rate)
+            lines.push(Line::from(vec![
+                Span::styled("Load Model:  ", self.theme.normal),
+                Span::styled("Open (arrival rate)", self.theme.muted),
+            ]));
+
             // Show target vs achieved rate
             let achieved_rate = self.snapshot.rolling_rps;
             let target_rate = self.snapshot.target_rate as f64;

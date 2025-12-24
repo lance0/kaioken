@@ -23,6 +23,11 @@ fn render_html<W: Write>(w: &mut W, snapshot: &StatsSnapshot, config: &LoadConfi
         error_rate: snapshot.error_rate,
         requests_per_sec: snapshot.requests_per_sec,
         bytes_received: snapshot.bytes_received,
+        dropped_iterations: if snapshot.dropped_iterations > 0 || config.arrival_rate.is_some() {
+            Some(snapshot.dropped_iterations)
+        } else {
+            None
+        },
     };
 
     let latency = Latency {
