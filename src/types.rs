@@ -135,6 +135,7 @@ pub struct CheckStats {
 }
 
 impl CheckStats {
+    #[allow(dead_code)]
     pub fn pass_rate(&self) -> f64 {
         if self.total > 0 {
             self.passed as f64 / self.total as f64
@@ -236,11 +237,13 @@ impl RequestResult {
         self.status.map(|s| s < 400).unwrap_or(false)
     }
 
+    #[allow(dead_code)]
     pub fn is_error(&self) -> bool {
         self.error.is_some() || self.status.map(|s| s >= 400).unwrap_or(false)
     }
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Default)]
 pub struct StatsSnapshot {
     pub elapsed: Duration,
@@ -328,6 +331,7 @@ impl ExtractionSource {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct Scenario {
     pub name: String,
@@ -404,6 +408,7 @@ pub enum RunPhase {
     Running,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RunState {
     Initializing,

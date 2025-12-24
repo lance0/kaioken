@@ -394,6 +394,7 @@ impl RampingArrivalRateExecutor {
         self.vus_active.clone()
     }
 
+    #[allow(dead_code)]
     pub fn current_rate(&self) -> Arc<AtomicU32> {
         self.current_rate.clone()
     }

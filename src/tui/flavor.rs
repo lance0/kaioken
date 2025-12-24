@@ -38,6 +38,7 @@ impl Flavor {
         }
     }
 
+    #[allow(dead_code)]
     pub fn status_error_high(&self) -> &'static str {
         if self.serious {
             "High error rate!"
@@ -78,6 +79,7 @@ impl Flavor {
         }
     }
 
+    #[allow(dead_code)]
     pub fn improvement_indicator(&self) -> &'static str {
         if self.serious {
             "IMPROVED"
@@ -86,6 +88,7 @@ impl Flavor {
         }
     }
 
+    #[allow(dead_code)]
     pub fn regression_indicator(&self) -> &'static str {
         if self.serious {
             "REGRESSED"

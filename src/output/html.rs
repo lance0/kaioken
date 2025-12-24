@@ -1,4 +1,4 @@
-use crate::output::json::{ArrivalRateSummary, JsonOutput, Latency, Summary};
+use crate::output::json::{ArrivalRateSummary, Latency, Summary};
 use crate::types::{LoadConfig, StatsSnapshot};
 use std::fs::File;
 use std::io::{self, BufWriter, Write};

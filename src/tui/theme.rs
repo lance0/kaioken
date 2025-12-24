@@ -35,6 +35,7 @@ impl ThemeMode {
     }
 }
 
+#[allow(dead_code)]
 pub struct Theme {
     pub title: Style,
     pub header: Style,

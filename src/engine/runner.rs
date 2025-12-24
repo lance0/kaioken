@@ -61,18 +61,22 @@ impl Engine {
             || self.config.stages.iter().any(|s| s.target_rate.is_some())
     }
 
+    #[allow(dead_code)]
     pub fn dropped_iterations(&self) -> u64 {
         self.dropped_iterations.load(Ordering::Relaxed)
     }
 
+    #[allow(dead_code)]
     pub fn vus_active(&self) -> u32 {
         self.vus_active.load(Ordering::Relaxed)
     }
 
+    #[allow(dead_code)]
     pub fn vus_max(&self) -> u32 {
         self.vus_max.load(Ordering::Relaxed)
     }
 
+    #[allow(dead_code)]
     pub fn threshold_failed(&self) -> bool {
         self.threshold_failed.load(Ordering::Relaxed)
     }
@@ -81,6 +85,7 @@ impl Engine {
         self.threshold_failed.clone()
     }
 
+    #[allow(dead_code)]
     pub fn check_stats(&self) -> HashMap<String, (u64, u64)> {
         self.check_stats.lock().unwrap().clone()
     }
@@ -105,6 +110,7 @@ impl Engine {
         self.phase_tx.subscribe()
     }
 
+    #[allow(dead_code)]
     pub fn stage_info_rx(&self) -> Option<watch::Receiver<StageInfo>> {
         self.stage_info_rx.clone()
     }
@@ -531,7 +537,7 @@ impl Engine {
 
 async fn run_fail_fast_checker(
     thresholds: Vec<Threshold>,
-    mut snapshot_rx: watch::Receiver<StatsSnapshot>,
+    snapshot_rx: watch::Receiver<StatsSnapshot>,
     cancel_token: CancellationToken,
     threshold_failed: Arc<AtomicBool>,
 ) {

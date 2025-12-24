@@ -57,6 +57,7 @@ impl RateLimiter {
     }
 }
 
+#[allow(dead_code)]
 pub struct RampUpScheduler {
     concurrency: u32,
     ramp_duration: Duration,
@@ -101,6 +102,7 @@ impl RampUpScheduler {
         }
     }
 
+    #[allow(dead_code)]
     pub fn current_active(&self) -> u32 {
         if self.ramp_duration.is_zero() {
             return self.concurrency;
@@ -117,6 +119,7 @@ impl RampUpScheduler {
 }
 
 /// Info about current stage for display purposes
+#[allow(dead_code)]
 #[derive(Debug, Clone, Default)]
 pub struct StageInfo {
     pub stage_index: usize,
@@ -127,6 +130,7 @@ pub struct StageInfo {
     pub stage_duration: Duration,
 }
 
+#[allow(dead_code)]
 pub struct StagesScheduler {
     stages: Vec<Stage>,
     active_permits: Arc<Semaphore>,
@@ -168,6 +172,7 @@ impl StagesScheduler {
         self.active_permits.clone()
     }
 
+    #[allow(dead_code)]
     pub fn current_target(&self) -> u32 {
         self.current_target.load(Ordering::Relaxed)
     }
