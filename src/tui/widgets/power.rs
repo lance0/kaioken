@@ -49,24 +49,32 @@ impl<'a> PowerWidget<'a> {
                 self.theme.muted
             };
 
+            // Calculate dropped percentage
+            let total_iterations = self.snapshot.total_requests + self.snapshot.dropped_iterations;
+            let dropped_pct = if total_iterations > 0 {
+                self.snapshot.dropped_iterations as f64 / total_iterations as f64 * 100.0
+            } else {
+                0.0
+            };
+
             vec![
                 Line::from(vec![
                     Span::styled("Load Model:  ", self.theme.normal),
                     Span::styled("Open (arrival rate)", self.theme.muted),
                 ]),
                 Line::from(vec![
-                    Span::styled("Achieved RPS:", self.theme.normal),
-                    Span::styled(format!("{:>7.0}", achieved_rate), 
+                    Span::styled("Achieved (1s):", self.theme.normal),
+                    Span::styled(format!("{:>6.0}", achieved_rate), 
                         if rate_diff > 10.0 { self.theme.warning } else { self.theme.success }),
                     Span::raw("  "),
                     Span::styled(format!("[{}]", rank), rank_style),
                 ]),
                 Line::from(vec![
                     Span::styled("Target RPS:  ", self.theme.normal),
-                    Span::styled(format!("{:>7}", self.snapshot.target_rate), self.theme.highlight),
+                    Span::styled(format!("{:>6}", self.snapshot.target_rate), self.theme.highlight),
                     Span::styled("  Dropped: ", self.theme.normal),
                     Span::styled(
-                        format!("{}", self.snapshot.dropped_iterations),
+                        format!("{} ({:.2}%)", self.snapshot.dropped_iterations, dropped_pct),
                         if self.snapshot.dropped_iterations > 0 { self.theme.error } else { self.theme.success },
                     ),
                 ]),
@@ -90,7 +98,7 @@ impl<'a> PowerWidget<'a> {
                 ]),
             ]
         } else {
-            // Closed model (VU-driven) - original display
+            // Closed model (VU-driven)
             let rank = self.flavor.power_rank(self.snapshot.rolling_rps);
             let rank_style = if self.snapshot.rolling_rps > 9000.0 {
                 self.theme.highlight
@@ -99,6 +107,10 @@ impl<'a> PowerWidget<'a> {
             };
 
             vec![
+                Line::from(vec![
+                    Span::styled("Load Model:  ", self.theme.normal),
+                    Span::styled("Closed (VU-driven)", self.theme.muted),
+                ]),
                 Line::from(vec![
                     Span::styled("Rolling RPS: ", self.theme.normal),
                     Span::styled(format!("{:>8.0}", self.snapshot.rolling_rps), self.theme.highlight),

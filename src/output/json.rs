@@ -108,6 +108,7 @@ pub struct Summary {
 pub struct ArrivalRateSummary {
     pub target_rps: u32,
     pub achieved_rps: f64,
+    pub achieved_rps_window_secs: u32,
     pub max_vus: u32,
     pub dropped_iterations: u64,
 }
@@ -265,7 +266,8 @@ pub fn create_output(
             arrival_rate: if config.arrival_rate.is_some() {
                 Some(ArrivalRateSummary {
                     target_rps: config.arrival_rate.unwrap_or(0),
-                    achieved_rps: snapshot.requests_per_sec,
+                    achieved_rps: snapshot.rolling_rps,
+                    achieved_rps_window_secs: 1,
                     max_vus: config.max_vus.unwrap_or(0),
                     dropped_iterations: snapshot.dropped_iterations,
                 })

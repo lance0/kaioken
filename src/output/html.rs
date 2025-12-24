@@ -26,7 +26,8 @@ fn render_html<W: Write>(w: &mut W, snapshot: &StatsSnapshot, config: &LoadConfi
         arrival_rate: if config.arrival_rate.is_some() {
             Some(ArrivalRateSummary {
                 target_rps: config.arrival_rate.unwrap_or(0),
-                achieved_rps: snapshot.requests_per_sec,
+                achieved_rps: snapshot.rolling_rps,
+                achieved_rps_window_secs: 1,
                 max_vus: config.max_vus.unwrap_or(0),
                 dropped_iterations: snapshot.dropped_iterations,
             })
