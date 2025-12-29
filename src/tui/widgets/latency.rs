@@ -18,20 +18,48 @@ impl<'a> LatencyWidget<'a> {
     }
 
     pub fn render(&self, frame: &mut Frame, area: Rect) {
+        // Use corrected latency if available, otherwise fall back to wall-clock
+        let use_corrected = self.snapshot.latency_correction_enabled
+            && self.snapshot.corrected_latency_p50_us.is_some();
+
+        let title = if use_corrected {
+            " LATENCY (ms) [corrected] "
+        } else {
+            " LATENCY (ms) "
+        };
+
         let block = Block::default()
-            .title(" LATENCY (ms) ")
+            .title(title)
             .title_style(self.theme.header)
             .borders(Borders::ALL)
             .border_style(self.theme.border);
 
-        let max_latency = self.snapshot.latency_p999_us.max(1) as f64;
+        let (p50, p90, p95, p99, p999) = if use_corrected {
+            (
+                self.snapshot.corrected_latency_p50_us.unwrap_or(0),
+                self.snapshot.corrected_latency_p90_us.unwrap_or(0),
+                self.snapshot.corrected_latency_p95_us.unwrap_or(0),
+                self.snapshot.corrected_latency_p99_us.unwrap_or(0),
+                self.snapshot.corrected_latency_p999_us.unwrap_or(0),
+            )
+        } else {
+            (
+                self.snapshot.latency_p50_us,
+                self.snapshot.latency_p90_us,
+                self.snapshot.latency_p95_us,
+                self.snapshot.latency_p99_us,
+                self.snapshot.latency_p999_us,
+            )
+        };
+
+        let max_latency = p999.max(1) as f64;
 
         let percentiles = [
-            ("p50", self.snapshot.latency_p50_us),
-            ("p90", self.snapshot.latency_p90_us),
-            ("p95", self.snapshot.latency_p95_us),
-            ("p99", self.snapshot.latency_p99_us),
-            ("p999", self.snapshot.latency_p999_us),
+            ("p50", p50),
+            ("p90", p90),
+            ("p95", p95),
+            ("p99", p99),
+            ("p999", p999),
         ];
 
         let lines: Vec<Line> = percentiles

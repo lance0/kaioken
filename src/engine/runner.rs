@@ -174,7 +174,8 @@ impl Engine {
 
         // Spawn check stats aggregator
         let check_stats_clone = self.check_stats.clone();
-        let check_agg_handle = check_rx.map(|mut rx| tokio::spawn(async move {
+        let check_agg_handle = check_rx.map(|mut rx| {
+            tokio::spawn(async move {
                 while let Some(check_result) = rx.recv().await {
                     let mut stats = check_stats_clone.lock().unwrap();
                     let entry = stats.entry(check_result.name).or_insert((0, 0));
@@ -183,7 +184,8 @@ impl Engine {
                     }
                     entry.1 += 1;
                 }
-            }));
+            })
+        });
 
         // Create shared metric references for arrival rate tracking
         let dropped_ref = Arc::new(AtomicU64::new(0));
@@ -244,6 +246,7 @@ impl Engine {
                 rate_stages,
                 max_vus,
                 pre_allocated_vus,
+                self.config.latency_correction,
                 client,
                 self.config.url.clone(),
                 self.config.method.clone(),
@@ -291,6 +294,7 @@ impl Engine {
                 self.config.duration,
                 max_vus,
                 pre_allocated_vus,
+                self.config.latency_correction,
                 client,
                 self.config.url.clone(),
                 self.config.method.clone(),
@@ -471,7 +475,8 @@ impl Engine {
 
         // Spawn check stats aggregator - drains channel completely
         let check_stats_clone = self.check_stats.clone();
-        let check_agg_handle = check_rx.map(|mut rx| tokio::spawn(async move {
+        let check_agg_handle = check_rx.map(|mut rx| {
+            tokio::spawn(async move {
                 while let Some(check_result) = rx.recv().await {
                     let mut stats = check_stats_clone.lock().unwrap();
                     let entry = stats.entry(check_result.name).or_insert((0, 0));
@@ -480,7 +485,8 @@ impl Engine {
                     }
                     entry.1 += 1;
                 }
-            }));
+            })
+        });
 
         for id in 0..max_workers {
             let worker = Worker::new(

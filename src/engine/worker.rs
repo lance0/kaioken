@@ -173,6 +173,7 @@ impl Worker {
                 &headers,
                 body.as_deref(),
                 capture_body,
+                None, // No latency correction for closed-loop mode
             )
             .await;
 
@@ -188,18 +189,19 @@ impl Worker {
 
             // Evaluate checks if configured
             if !self.checks.is_empty()
-                && let Some(ref check_tx) = self.check_tx {
-                    let body_str = result.body.as_deref().unwrap_or("");
-                    for check in self.checks.iter() {
-                        let passed = check.condition.evaluate(result.status, body_str);
-                        let _ = check_tx
-                            .send(CheckResult {
-                                name: check.name.clone(),
-                                passed,
-                            })
-                            .await;
-                    }
+                && let Some(ref check_tx) = self.check_tx
+            {
+                let body_str = result.body.as_deref().unwrap_or("");
+                for check in self.checks.iter() {
+                    let passed = check.condition.evaluate(result.status, body_str);
+                    let _ = check_tx
+                        .send(CheckResult {
+                            name: check.name.clone(),
+                            passed,
+                        })
+                        .await;
                 }
+            }
 
             if self.result_tx.send(result).await.is_err() {
                 break;
@@ -269,15 +271,16 @@ fn extract_value(
                 // Use the JsonPath trait method on Value
                 let results = json.query(path);
                 if let Ok(values) = results
-                    && let Some(first) = values.first() {
-                        return match first {
-                            serde_json::Value::String(s) => Some(s.clone()),
-                            serde_json::Value::Number(n) => Some(n.to_string()),
-                            serde_json::Value::Bool(b) => Some(b.to_string()),
-                            serde_json::Value::Null => Some("null".to_string()),
-                            other => Some(other.to_string()),
-                        };
-                    }
+                    && let Some(first) = values.first()
+                {
+                    return match first {
+                        serde_json::Value::String(s) => Some(s.clone()),
+                        serde_json::Value::Number(n) => Some(n.to_string()),
+                        serde_json::Value::Bool(b) => Some(b.to_string()),
+                        serde_json::Value::Null => Some("null".to_string()),
+                        other => Some(other.to_string()),
+                    };
+                }
             }
             None
         }
@@ -290,9 +293,10 @@ fn extract_value(
         ExtractionSource::Regex(pattern, group) => {
             if let Ok(re) = regex_lite::Regex::new(pattern)
                 && let Some(caps) = re.captures(body)
-                    && let Some(m) = caps.get(*group) {
-                        return Some(m.as_str().to_string());
-                    }
+                && let Some(m) = caps.get(*group)
+            {
+                return Some(m.as_str().to_string());
+            }
             None
         }
         ExtractionSource::Body => Some(body.to_string()),

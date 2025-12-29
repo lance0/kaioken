@@ -25,7 +25,7 @@ pub struct Cli {
 pub enum Commands {
     /// Run a load test (default if no subcommand specified)
     #[command(name = "run")]
-    Run(RunArgs),
+    Run(Box<RunArgs>),
 
     /// Compare two load test results for regressions
     Compare(CompareArgs),
@@ -42,7 +42,7 @@ pub enum Commands {
 
 impl Default for Commands {
     fn default() -> Self {
-        Commands::Run(RunArgs::default())
+        Commands::Run(Box::default())
     }
 }
 
@@ -119,6 +119,10 @@ pub struct RunArgs {
     /// Maximum VUs for arrival rate mode (default: 100)
     #[arg(long, default_value = "100")]
     pub max_vus: u32,
+
+    /// Disable latency correction (normally auto-enabled for arrival rate mode)
+    #[arg(long)]
+    pub no_latency_correction: bool,
 
     /// Config file path (TOML)
     #[arg(short = 'f', long = "config")]

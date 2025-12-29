@@ -8,17 +8,28 @@ Fast local load testing against HTTP endpoints with zero setup friction, real-ti
 
 ## Competitive Positioning
 
-| Feature | kaioken | k6 | Gatling | Locust |
-|---------|:-------:|:--:|:-------:|:------:|
-| **Real-time TUI** | ✅ Unique | ❌ | ❌ | ❌ |
-| **Compare/Regression** | ✅ Unique | ❌ | ❌ | ❌ |
-| **Zero Config** | ✅ | ❌ | ❌ | ❌ |
-| **Constant Arrival Rate** | ✅ | ✅ | ✅ | ✅ |
-| **CI/CD Thresholds** | ✅ | ✅ | ✅ | ❌ |
-| **Request Chaining** | ✅ | ✅ | ✅ | ✅ |
-| **WebSocket** | 🔜 v1.1 | ✅ | ✅ | ❌ |
-| **gRPC** | 🔜 v1.2 | ✅ | ✅ | ❌ |
-| **Language** | Rust | Go | Scala | Python |
+| Feature | kaioken | k6 | oha | wrk | Gatling |
+|---------|:-------:|:--:|:---:|:---:|:-------:|
+| **Real-time TUI** | ✅ Unique | ❌ | ✅ | ❌ | ❌ |
+| **Compare/Regression** | ✅ Unique | ❌ | ❌ | ❌ | ❌ |
+| **Zero Config** | ✅ | ❌ | ✅ | ✅ | ❌ |
+| **Constant Arrival Rate** | ✅ | ✅ | ❌ | ❌ | ✅ |
+| **CI/CD Thresholds** | ✅ | ✅ | ❌ | ❌ | ✅ |
+| **Request Chaining** | ✅ | ✅ | ❌ | ❌ | ✅ |
+| **Multi-scenario** | ✅ | ✅ | ❌ | ❌ | ✅ |
+| **Latency Correction** | ✅ | ❌ | ✅ | ❌ | ❌ |
+| **HTTP/3** | 🔜 v1.3 | ❌ | ✅ | ❌ | ❌ |
+| **WebSocket** | 🔜 v1.2 | ✅ | ❌ | ❌ | ✅ |
+| **gRPC** | 🔜 v1.3 | ✅ | ❌ | ❌ | ✅ |
+| **Prometheus Export** | 🔜 v1.4 | ✅ | ❌ | ❌ | ✅ |
+| **Language** | Rust | Go | Rust | C | Scala |
+
+### Key Differentiators
+
+**vs k6**: Real-time TUI, regression detection, zero setup, single binary (no runtime)
+**vs oha**: Advanced scenarios, request chaining, thresholds, arrival rate, compare mode
+**vs wrk**: Lua-free config, multi-scenario, thresholds, rich output formats
+**vs Gatling**: Zero JVM overhead, instant startup, real-time feedback
 
 ---
 
@@ -126,57 +137,79 @@ Fast local load testing against HTTP endpoints with zero setup friction, real-ti
 - [x] CLI flags: `--arrival-rate` and `--max-vus`
 - [x] TUI display for VUs active/max and dropped iterations
 
-### v1.1 — WebSocket Support
+### v1.1 — Accuracy & Distribution
 
-Essential for modern real-time applications.
+- [x] **Latency correction** - Avoid coordinated omission problem
+  - Auto-enabled for arrival rate mode, disable with `--no-latency-correction`
+  - Tracks queue wait time separately from actual server response time
+  - TUI shows `[corrected]` indicator when active
+- [ ] **Redirect control** - `follow_redirects = false` option
+- [ ] **Improved error messages** - Suggestions for common mistakes
+- [ ] **Package distribution**:
+  - [x] Publish to crates.io (`cargo install kaioken`)
+  - [ ] Homebrew formula
+  - [ ] GitHub releases with prebuilt binaries
+  - [ ] Docker image
+
+### v1.2 — WebSocket Support
 
 - [ ] **WebSocket connections** - `ws://` and `wss://` protocol support
 - [ ] **Message send/receive** - Bidirectional messaging load tests
 - [ ] **Connection lifecycle** - Open, message, close patterns
 - [ ] **WebSocket checks** - Validate message content
+- [ ] **WebSocket metrics** - Messages/sec, connection time, frame sizes
 
-### v1.2 — gRPC Support
+### v1.3 — Protocol Expansion
 
-Critical for microservices architectures.
-
+- [ ] **HTTP/3 support** - QUIC-based protocol (experimental, feature-gated)
 - [ ] **gRPC unary calls** - Request/response pattern
 - [ ] **Protobuf support** - Load .proto files or reflection
 - [ ] **gRPC streaming** - Client, server, and bidirectional streams
 - [ ] **gRPC checks** - Status codes, response validation
 
-### v1.3 — Production Polish
+### v1.4 — Observability & Integration
+
+- [ ] **Prometheus metrics endpoint** - Expose `/metrics` while test runs
+- [ ] **InfluxDB export** - Time-series metrics output
+- [ ] **OpenTelemetry traces** - Distributed tracing support
+- [ ] **CI/CD templates** - GitHub Actions, GitLab CI, Jenkins examples
+- [ ] **Import converters** - HAR files, Postman collections, OpenAPI specs
+
+### v1.5 — Production Polish
 
 - [ ] **Comprehensive test suite** - Unit, integration, e2e tests
-- [ ] **Performance benchmarks** - kaioken vs wrk/vegeta/k6
-- [ ] **Improved error messages** - Suggestions for common mistakes
-- [ ] **Redirect control** - `follow_redirects = false`
+- [ ] **Documentation site** - Dedicated docs with examples and tutorials
+- [ ] **Plugin system** - Custom checks, extractors, output formats
+- [ ] **Statistical significance** - Multi-run baseline comparison with confidence intervals
 
 ---
 
-## Future Considerations (Post v1.x)
-
-**Observability:**
-- Prometheus metrics endpoint — Real-time scraping during runs
-- InfluxDB/OpenTelemetry export — Time-series metrics output
-- Custom metrics — User-defined counters/gauges
+## Future Considerations (v2.x+)
 
 **Protocol Support:**
 - GraphQL — Query-aware load testing with introspection
 - MQTT — IoT protocol testing
 - Kafka — Message queue load testing
+- TCP/UDP — Raw socket testing
 
 **Advanced Features:**
 - Distributed mode — Coordinated multi-node load generation
 - Lua/Rhai scripting — Dynamic request generation
 - File uploads — multipart/form-data support
 - Proxy support — HTTP/SOCKS proxy
-- Statistical significance — Multi-run baseline comparison
+- Custom metrics — User-defined counters/gauges
 
 **Metrics & Analysis:**
 - Keep-alive metrics — Connection reuse tracking
 - DNS re-resolution — For DNS-based load balancing
 - Flame graphs — CPU profiling integration
 - AI-powered anomaly detection — Smart regression detection
+- Connection pool metrics — Track reuse, idle, and failed connections
+
+**Developer Experience:**
+- VS Code extension — Syntax highlighting for kaioken configs
+- Browser extension — Record traffic as kaioken scenarios
+- Interactive mode — REPL for exploring responses
 
 ---
 

@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Latency correction** - Avoid coordinated omission problem for accurate open-loop testing:
+  - Tracks queue wait time separately from actual server response time
+  - Auto-enabled for arrival rate mode (`--arrival-rate`)
+  - Disable with `--no-latency-correction` if needed
+  - TUI shows `[corrected]` indicator when active
+  - JSON output includes `corrected_latency_us` and `queue_time_us` sections
+
 ## [1.0.0] - 2025-12-24
 
 ### Added

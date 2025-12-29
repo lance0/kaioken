@@ -78,8 +78,6 @@ fn format_metric_value(metric: &str, value: f64) -> String {
         format!("{:.2}ms", value)
     } else if metric == "error_rate" || metric == "check_pass_rate" {
         format!("{:.4}", value)
-    } else if metric == "rps" {
-        format!("{:.2}", value)
     } else {
         format!("{:.2}", value)
     }

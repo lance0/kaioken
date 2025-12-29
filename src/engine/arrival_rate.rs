@@ -1,4 +1,4 @@
-use crate::http::execute_request;
+use crate::http::{execute_request, now_us};
 use crate::types::{Check, CheckCondition, RequestResult, Scenario};
 use reqwest::Client;
 use std::sync::Arc;
@@ -16,6 +16,7 @@ pub struct ArrivalRateExecutor {
     duration: Duration,
     max_vus: u32,
     pre_allocated_vus: u32,
+    latency_correction: bool,
 
     // Request configuration
     client: Client,
@@ -45,6 +46,7 @@ impl ArrivalRateExecutor {
         duration: Duration,
         max_vus: u32,
         pre_allocated_vus: u32,
+        latency_correction: bool,
         client: Client,
         url: String,
         method: reqwest::Method,
@@ -63,6 +65,7 @@ impl ArrivalRateExecutor {
             duration,
             max_vus,
             pre_allocated_vus: effective_pre_allocated,
+            latency_correction,
             client,
             url,
             method,
@@ -160,6 +163,13 @@ impl ArrivalRateExecutor {
     }
 
     fn spawn_iteration(&self, permit: tokio::sync::OwnedSemaphorePermit) {
+        // Capture scheduled time NOW (when iteration should start)
+        let scheduled_at_us = if self.latency_correction {
+            Some(now_us())
+        } else {
+            None
+        };
+
         let iteration_id = self.iteration_counter.fetch_add(1, Ordering::Relaxed);
         let vus_active = self.vus_active.clone();
         let result_tx = self.result_tx.clone();
@@ -189,6 +199,7 @@ impl ArrivalRateExecutor {
                 &checks,
                 &check_tx,
                 &cancel_token,
+                scheduled_at_us,
             )
             .await;
 
@@ -202,6 +213,7 @@ impl ArrivalRateExecutor {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn execute_iteration(
     iteration_id: u64,
     client: &Client,
@@ -213,6 +225,7 @@ async fn execute_iteration(
     checks: &[Check],
     check_tx: &Option<mpsc::Sender<CheckResult>>,
     cancel_token: &CancellationToken,
+    scheduled_at_us: Option<u64>,
 ) -> Option<RequestResult> {
     if cancel_token.is_cancelled() {
         return None;
@@ -266,23 +279,25 @@ async fn execute_iteration(
         &headers,
         body.as_deref(),
         capture_body,
+        scheduled_at_us,
     )
     .await;
 
     // Evaluate checks
     if !checks.is_empty()
-        && let Some(tx) = &check_tx {
-            let body_str = result.body.as_deref().unwrap_or("");
-            for check in checks.iter() {
-                let passed = check.condition.evaluate(result.status, body_str);
-                let _ = tx
-                    .send(CheckResult {
-                        name: check.name.clone(),
-                        passed,
-                    })
-                    .await;
-            }
+        && let Some(tx) = &check_tx
+    {
+        let body_str = result.body.as_deref().unwrap_or("");
+        for check in checks.iter() {
+            let passed = check.condition.evaluate(result.status, body_str);
+            let _ = tx
+                .send(CheckResult {
+                    name: check.name.clone(),
+                    passed,
+                })
+                .await;
         }
+    }
 
     Some(result)
 }
@@ -328,6 +343,7 @@ pub struct RampingArrivalRateExecutor {
     stages: Vec<RateStage>,
     max_vus: u32,
     pre_allocated_vus: u32,
+    latency_correction: bool,
 
     // Request configuration
     client: Client,
@@ -357,6 +373,7 @@ impl RampingArrivalRateExecutor {
         stages: Vec<RateStage>,
         max_vus: u32,
         pre_allocated_vus: u32,
+        latency_correction: bool,
         client: Client,
         url: String,
         method: reqwest::Method,
@@ -375,6 +392,7 @@ impl RampingArrivalRateExecutor {
             stages,
             max_vus,
             pre_allocated_vus: effective_pre_allocated,
+            latency_correction,
             client,
             url,
             method,
@@ -520,6 +538,13 @@ impl RampingArrivalRateExecutor {
     }
 
     fn spawn_iteration(&self, permit: tokio::sync::OwnedSemaphorePermit) {
+        // Capture scheduled time NOW (when iteration should start)
+        let scheduled_at_us = if self.latency_correction {
+            Some(now_us())
+        } else {
+            None
+        };
+
         let iteration_id = self.iteration_counter.fetch_add(1, Ordering::Relaxed);
         let vus_active = self.vus_active.clone();
         let result_tx = self.result_tx.clone();
@@ -548,6 +573,7 @@ impl RampingArrivalRateExecutor {
                 &checks,
                 &check_tx,
                 &cancel_token,
+                scheduled_at_us,
             )
             .await;
 

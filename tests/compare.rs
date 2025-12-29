@@ -424,9 +424,8 @@ mod warnings {
 
         let baseline_json = create_test_results(1000, 100.0, 0.01, 10000, None, None);
 
-        let current_json =
-            create_test_results(1000, 100.0, 0.01, 10000, None, None)
-                .replace(r#""concurrency": 50"#, r#""concurrency": 100"#);
+        let current_json = create_test_results(1000, 100.0, 0.01, 10000, None, None)
+            .replace(r#""concurrency": 50"#, r#""concurrency": 100"#);
 
         fs::write(&baseline, baseline_json).unwrap();
         fs::write(&current, current_json).unwrap();

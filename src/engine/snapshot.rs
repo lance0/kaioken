@@ -13,6 +13,40 @@ pub fn create_snapshot_with_arrival_rate(
     vus_max: u32,
     target_rate: u32,
 ) -> StatsSnapshot {
+    // Get corrected latency metrics if available
+    let latency_correction_enabled = stats.has_corrected_latency();
+    let (corrected_min, corrected_max, corrected_mean) = if latency_correction_enabled {
+        (
+            Some(stats.corrected_latency_min()),
+            Some(stats.corrected_latency_max()),
+            Some(stats.corrected_latency_mean()),
+        )
+    } else {
+        (None, None, None)
+    };
+
+    let corrected_percentiles = if latency_correction_enabled {
+        (
+            Some(stats.corrected_latency_percentile(50.0)),
+            Some(stats.corrected_latency_percentile(75.0)),
+            Some(stats.corrected_latency_percentile(90.0)),
+            Some(stats.corrected_latency_percentile(95.0)),
+            Some(stats.corrected_latency_percentile(99.0)),
+            Some(stats.corrected_latency_percentile(99.9)),
+        )
+    } else {
+        (None, None, None, None, None, None)
+    };
+
+    let (queue_mean, queue_p99) = if latency_correction_enabled {
+        (
+            Some(stats.queue_time_mean()),
+            Some(stats.queue_time_percentile(99.0)),
+        )
+    } else {
+        (None, None)
+    };
+
     StatsSnapshot {
         elapsed: stats.elapsed(),
         total_requests: stats.total_requests,
@@ -44,5 +78,20 @@ pub fn create_snapshot_with_arrival_rate(
         vus_active,
         vus_max,
         target_rate,
+
+        // Latency correction metrics
+        latency_correction_enabled,
+        corrected_latency_min_us: corrected_min,
+        corrected_latency_max_us: corrected_max,
+        corrected_latency_mean_us: corrected_mean,
+        corrected_latency_p50_us: corrected_percentiles.0,
+        corrected_latency_p75_us: corrected_percentiles.1,
+        corrected_latency_p90_us: corrected_percentiles.2,
+        corrected_latency_p95_us: corrected_percentiles.3,
+        corrected_latency_p99_us: corrected_percentiles.4,
+        corrected_latency_p999_us: corrected_percentiles.5,
+        queue_time_mean_us: queue_mean,
+        queue_time_p99_us: queue_p99,
+        total_queue_time_us: stats.total_queue_time_us,
     }
 }

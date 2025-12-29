@@ -210,6 +210,10 @@ pub struct RequestResult {
     pub error: Option<ErrorKind>,
     pub bytes_received: u64,
     pub body: Option<String>,
+    // Latency correction fields (v1.1)
+    pub scheduled_at_us: Option<u64>, // When request was supposed to start (epoch us)
+    pub started_at_us: Option<u64>,   // When request actually started (epoch us)
+    pub queue_time_us: Option<u64>,   // Time spent waiting for a VU (started - scheduled)
 }
 
 impl RequestResult {
@@ -225,6 +229,9 @@ impl RequestResult {
             error: None,
             bytes_received,
             body,
+            scheduled_at_us: None,
+            started_at_us: None,
+            queue_time_us: None,
         }
     }
 
@@ -235,7 +242,25 @@ impl RequestResult {
             error: Some(kind),
             bytes_received: 0,
             body: None,
+            scheduled_at_us: None,
+            started_at_us: None,
+            queue_time_us: None,
         }
+    }
+
+    /// Set latency correction timing info
+    pub fn with_timing(mut self, scheduled_at_us: u64, started_at_us: u64) -> Self {
+        let queue_time = started_at_us.saturating_sub(scheduled_at_us);
+        self.scheduled_at_us = Some(scheduled_at_us);
+        self.started_at_us = Some(started_at_us);
+        self.queue_time_us = Some(queue_time);
+        self
+    }
+
+    /// Get corrected latency (actual server time, excluding queue wait)
+    pub fn corrected_latency_us(&self) -> Option<u64> {
+        self.queue_time_us
+            .map(|q| self.latency_us.saturating_sub(q))
     }
 
     pub fn is_success(&self) -> bool {
@@ -285,6 +310,21 @@ pub struct StatsSnapshot {
     pub vus_active: u32,
     pub vus_max: u32,
     pub target_rate: u32, // Target RPS (0 = not in arrival rate mode)
+
+    // Latency correction metrics (v1.1)
+    pub latency_correction_enabled: bool,
+    pub corrected_latency_min_us: Option<u64>,
+    pub corrected_latency_max_us: Option<u64>,
+    pub corrected_latency_mean_us: Option<f64>,
+    pub corrected_latency_p50_us: Option<u64>,
+    pub corrected_latency_p75_us: Option<u64>,
+    pub corrected_latency_p90_us: Option<u64>,
+    pub corrected_latency_p95_us: Option<u64>,
+    pub corrected_latency_p99_us: Option<u64>,
+    pub corrected_latency_p999_us: Option<u64>,
+    pub queue_time_mean_us: Option<f64>,
+    pub queue_time_p99_us: Option<u64>,
+    pub total_queue_time_us: u64,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -378,6 +418,7 @@ pub struct LoadConfig {
     pub fail_fast: bool,
     pub arrival_rate: Option<u32>, // Requests per second
     pub max_vus: Option<u32>,      // Max concurrent requests
+    pub latency_correction: bool,  // Enable latency correction (auto for arrival_rate)
 }
 
 impl Default for LoadConfig {
@@ -406,6 +447,7 @@ impl Default for LoadConfig {
             fail_fast: false,
             arrival_rate: None,
             max_vus: None,
+            latency_correction: false,
         }
     }
 }

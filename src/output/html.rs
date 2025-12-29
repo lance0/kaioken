@@ -44,7 +44,7 @@ fn render_html<W: Write>(
         min: snapshot.latency_min_us,
         max: snapshot.latency_max_us,
         mean: snapshot.latency_mean_us,
-        stddev: snapshot.latency_stddev_us,
+        stddev: Some(snapshot.latency_stddev_us),
         p50: snapshot.latency_p50_us,
         p75: snapshot.latency_p75_us,
         p90: snapshot.latency_p90_us,

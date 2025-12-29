@@ -319,6 +319,10 @@ pub fn merge_config(args: &RunArgs, toml: Option<TomlConfig>) -> Result<LoadConf
         );
     }
 
+    // Auto-enable latency correction for arrival rate mode (unless explicitly disabled)
+    let latency_correction = !args.no_latency_correction
+        && (arrival_rate.is_some() || stages.iter().any(|s| s.target_rate.is_some()));
+
     Ok(LoadConfig {
         url,
         method,
@@ -343,6 +347,7 @@ pub fn merge_config(args: &RunArgs, toml: Option<TomlConfig>) -> Result<LoadConf
         fail_fast,
         arrival_rate,
         max_vus,
+        latency_correction,
     })
 }
 
@@ -434,16 +439,16 @@ fn parse_threshold_expr(metric: ThresholdMetric, expr: &str) -> Result<Threshold
     let expr = expr.trim();
 
     // Parse operator and value: "< 500", "<= 500", "> 100", ">= 100", "== 500"
-    let (operator, value_str) = if expr.starts_with("<=") {
-        (ThresholdOp::Lte, expr[2..].trim())
-    } else if expr.starts_with(">=") {
-        (ThresholdOp::Gte, expr[2..].trim())
-    } else if expr.starts_with("==") {
-        (ThresholdOp::Eq, expr[2..].trim())
-    } else if expr.starts_with('<') {
-        (ThresholdOp::Lt, expr[1..].trim())
-    } else if expr.starts_with('>') {
-        (ThresholdOp::Gt, expr[1..].trim())
+    let (operator, value_str) = if let Some(rest) = expr.strip_prefix("<=") {
+        (ThresholdOp::Lte, rest.trim())
+    } else if let Some(rest) = expr.strip_prefix(">=") {
+        (ThresholdOp::Gte, rest.trim())
+    } else if let Some(rest) = expr.strip_prefix("==") {
+        (ThresholdOp::Eq, rest.trim())
+    } else if let Some(rest) = expr.strip_prefix('<') {
+        (ThresholdOp::Lt, rest.trim())
+    } else if let Some(rest) = expr.strip_prefix('>') {
+        (ThresholdOp::Gt, rest.trim())
     } else {
         return Err(format!(
             "Invalid threshold expression for '{}': '{}'. Expected format: '< 500' or '>= 100'",

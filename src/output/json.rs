@@ -10,6 +10,10 @@ pub struct JsonOutput {
     pub metadata: Metadata,
     pub summary: Summary,
     pub latency_us: Latency,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub corrected_latency_us: Option<Latency>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub queue_time_us: Option<QueueTime>,
     pub status_codes: HashMap<String, u64>,
     pub errors: HashMap<String, u64>,
     pub timeline: Vec<TimelineEntry>,
@@ -118,13 +122,21 @@ pub struct Latency {
     pub min: u64,
     pub max: u64,
     pub mean: f64,
-    pub stddev: f64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stddev: Option<f64>,
     pub p50: u64,
     pub p75: u64,
     pub p90: u64,
     pub p95: u64,
     pub p99: u64,
     pub p999: u64,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct QueueTime {
+    pub mean: f64,
+    pub p99: u64,
+    pub total: u64,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -282,13 +294,42 @@ pub fn create_output(
             min: snapshot.latency_min_us,
             max: snapshot.latency_max_us,
             mean: snapshot.latency_mean_us,
-            stddev: snapshot.latency_stddev_us,
+            stddev: Some(snapshot.latency_stddev_us),
             p50: snapshot.latency_p50_us,
             p75: snapshot.latency_p75_us,
             p90: snapshot.latency_p90_us,
             p95: snapshot.latency_p95_us,
             p99: snapshot.latency_p99_us,
             p999: snapshot.latency_p999_us,
+        },
+        corrected_latency_us: if snapshot.latency_correction_enabled
+            && snapshot.corrected_latency_p50_us.is_some()
+        {
+            Some(Latency {
+                min: snapshot.corrected_latency_min_us.unwrap_or(0),
+                max: snapshot.corrected_latency_max_us.unwrap_or(0),
+                mean: snapshot.corrected_latency_mean_us.unwrap_or(0.0),
+                stddev: None,
+                p50: snapshot.corrected_latency_p50_us.unwrap_or(0),
+                p75: snapshot.corrected_latency_p75_us.unwrap_or(0),
+                p90: snapshot.corrected_latency_p90_us.unwrap_or(0),
+                p95: snapshot.corrected_latency_p95_us.unwrap_or(0),
+                p99: snapshot.corrected_latency_p99_us.unwrap_or(0),
+                p999: snapshot.corrected_latency_p999_us.unwrap_or(0),
+            })
+        } else {
+            None
+        },
+        queue_time_us: if snapshot.latency_correction_enabled
+            && snapshot.queue_time_mean_us.is_some()
+        {
+            Some(QueueTime {
+                mean: snapshot.queue_time_mean_us.unwrap_or(0.0),
+                p99: snapshot.queue_time_p99_us.unwrap_or(0),
+                total: snapshot.total_queue_time_us,
+            })
+        } else {
+            None
         },
         status_codes,
         errors,

@@ -248,15 +248,16 @@ impl StagesScheduler {
 
         // Final stage info update - only for VU-based stages
         if let Some(last) = self.stages.last()
-            && let Some(target) = last.target {
-                let _ = self.stage_info_tx.send(StageInfo {
-                    stage_index: self.stages.len() - 1,
-                    stage_count: self.stages.len(),
-                    target,
-                    current: target,
-                    stage_elapsed: last.duration,
-                    stage_duration: last.duration,
-                });
-            }
+            && let Some(target) = last.target
+        {
+            let _ = self.stage_info_tx.send(StageInfo {
+                stage_index: self.stages.len() - 1,
+                stage_count: self.stages.len(),
+                target,
+                current: target,
+                stage_elapsed: last.duration,
+                stage_duration: last.duration,
+            });
+        }
     }
 }

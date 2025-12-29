@@ -9,6 +9,7 @@ A Rust-based HTTP load testing tool with real-time terminal UI and DBZ flavor.
 
 - **Real-time TUI** - Live metrics with latency percentiles, RPS, status codes
 - **Constant arrival rate** - Fixed RPS load generation with automatic VU scaling
+- **Latency correction** - Avoid coordinated omission for accurate percentiles
 - **Thresholds** - CI/CD pass/fail criteria (p95 < 500ms, error_rate < 0.01, check_pass_rate > 0.95)
 - **Checks** - Response validation (status codes, body content, regex) with pass rate tracking
 - **Request chaining** - Extract values from responses for subsequent requests
@@ -25,24 +26,25 @@ A Rust-based HTTP load testing tool with real-time terminal UI and DBZ flavor.
 
 ## vs Other Tools
 
-| Feature | kaioken | k6 | vegeta | wrk | Gatling |
-|---------|:-------:|:--:|:------:|:---:|:-------:|
-| **Real-time TUI** | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Feature | kaioken | k6 | oha | wrk | Gatling |
+|---------|:-------:|:--:|:---:|:---:|:-------:|
+| **Real-time TUI** | ✅ | ❌ | ✅ | ❌ | ❌ |
 | **Zero config** | ✅ | ❌ | ✅ | ✅ | ❌ |
 | **Compare mode** | ✅ | ❌ | ❌ | ❌ | ❌ |
+| **Latency correction** | ✅ | ❌ | ✅ | ❌ | ❌ |
 | **HTML reports** | ✅ | ✅ | ❌ | ❌ | ✅ |
-| **Rate limiting** | ✅ | ✅ | ✅ | ❌ | ✅ |
-| **HTTP/2** | ✅ | ✅ | ✅ | ❌ | ✅ |
-| **Weighted scenarios** | ✅ | ✅ | ❌ | ❌ | ✅ |
-| **Config file** | TOML | JS | JSON | Lua | Scala |
 | **Checks/thresholds** | ✅ | ✅ | ❌ | ❌ | ✅ |
 | **Stages** | ✅ | ✅ | ❌ | ❌ | ✅ |
-| **Request chaining** | ✅ | ✅ | ❌ | ❌ | ✅ |
-| **Cookie jar** | ✅ | ✅ | ❌ | ❌ | ✅ |
 | **Arrival rate** | ✅ | ✅ | ❌ | ❌ | ✅ |
-| **Language** | Rust | Go | Go | C | Scala |
+| **Request chaining** | ✅ | ✅ | ❌ | ❌ | ✅ |
+| **Weighted scenarios** | ✅ | ✅ | ❌ | ❌ | ✅ |
+| **Cookie jar** | ✅ | ✅ | ❌ | ❌ | ✅ |
+| **HTTP/2** | ✅ | ✅ | ✅ | ❌ | ✅ |
+| **HTTP/3** | ❌ | ❌ | ✅ | ❌ | ❌ |
+| **Config file** | TOML | JS | ❌ | Lua | Scala |
+| **Language** | Rust | Go | Rust | C | Scala |
 
-**kaioken strengths:** Real-time visibility, instant feedback, regression detection, CI/CD thresholds, load stages, request chaining, memorable UX
+**kaioken strengths:** Real-time visibility, regression detection, CI/CD thresholds, load stages, request chaining, latency correction, memorable UX
 
 ## Installation
 
@@ -102,6 +104,7 @@ kaioken run [OPTIONS] [URL]
 | `--think-time` | — | Pause between requests (e.g., 500ms) |
 | `--arrival-rate` | 0 | Target RPS (enables arrival rate mode) |
 | `--max-vus` | 100 | Max VUs for arrival rate mode |
+| `--no-latency-correction` | false | Disable latency correction |
 | `-m, --method` | GET | HTTP method |
 | `-H, --header` | — | Header (repeatable) |
 | `-b, --body` | — | Request body |
@@ -250,6 +253,19 @@ target_rate = 0     # Ramp down
 **vs Rate Limiting (`--rate`):**
 - `--rate` limits an existing pool of workers (caps RPS from above)
 - `--arrival-rate` maintains a constant RPS (spawns work from below)
+
+## Latency Correction
+
+When using arrival rate mode, latency correction is automatically enabled to avoid the [coordinated omission problem](https://www.scylladb.com/2021/04/22/on-coordinated-omission/).
+
+When the server slows down, requests queue waiting for available VUs. Without correction, this queue time inflates latency percentiles. With correction:
+
+- **Queue time** is tracked separately (time waiting for a VU)
+- **Corrected latency** = total latency - queue time (actual server response time)
+- TUI shows `[corrected]` indicator when active
+- JSON output includes both `corrected_latency_us` and `queue_time_us`
+
+Disable with `--no-latency-correction` if you want wall-clock latency instead.
 
 ## Thresholds
 

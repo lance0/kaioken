@@ -107,23 +107,24 @@ impl App {
 
             while event::poll(Duration::from_millis(0))? {
                 if let Event::Key(key) = event::read()?
-                    && key.kind == KeyEventKind::Press {
-                        match key.code {
-                            KeyCode::Char('q') | KeyCode::Esc => {
-                                self.cancel_token.cancel();
-                            }
-                            KeyCode::Char('s') => {
-                                if let Some(path) = &self.output_path {
-                                    let _ = write_json(&snapshot, &self.config, path, None, None);
-                                }
-                            }
-                            KeyCode::Char('t') => {
-                                self.theme_mode = self.theme_mode.cycle();
-                                self.theme = Theme::from_mode(self.theme_mode);
-                            }
-                            _ => {}
+                    && key.kind == KeyEventKind::Press
+                {
+                    match key.code {
+                        KeyCode::Char('q') | KeyCode::Esc => {
+                            self.cancel_token.cancel();
                         }
+                        KeyCode::Char('s') => {
+                            if let Some(path) = &self.output_path {
+                                let _ = write_json(&snapshot, &self.config, path, None, None);
+                            }
+                        }
+                        KeyCode::Char('t') => {
+                            self.theme_mode = self.theme_mode.cycle();
+                            self.theme = Theme::from_mode(self.theme_mode);
+                        }
+                        _ => {}
                     }
+                }
             }
         }
 

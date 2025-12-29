@@ -16,12 +16,21 @@ pub struct Stats {
     last_second_requests: u64,
     last_second_time: Instant,
     rolling_window: Vec<(Instant, u64)>,
+    // Latency correction (v1.1)
+    corrected_histogram: Histogram<u64>,
+    queue_time_histogram: Histogram<u64>,
+    pub total_queue_time_us: u64,
+    corrected_samples: u64,
 }
 
 impl Stats {
     pub fn new(duration: Duration) -> Self {
         let histogram = Histogram::<u64>::new_with_bounds(1, 60_000_000, 3)
             .expect("Failed to create histogram");
+        let corrected_histogram = Histogram::<u64>::new_with_bounds(1, 60_000_000, 3)
+            .expect("Failed to create corrected histogram");
+        let queue_time_histogram = Histogram::<u64>::new_with_bounds(1, 60_000_000, 3)
+            .expect("Failed to create queue time histogram");
 
         let timeline_capacity = duration.as_secs() as usize + 60;
 
@@ -38,6 +47,10 @@ impl Stats {
             last_second_requests: 0,
             last_second_time: Instant::now(),
             rolling_window: Vec::with_capacity(100),
+            corrected_histogram,
+            queue_time_histogram,
+            total_queue_time_us: 0,
+            corrected_samples: 0,
         }
     }
 
@@ -54,6 +67,10 @@ impl Stats {
         self.last_second_requests = 0;
         self.last_second_time = Instant::now();
         self.rolling_window.clear();
+        self.corrected_histogram.reset();
+        self.queue_time_histogram.reset();
+        self.total_queue_time_us = 0;
+        self.corrected_samples = 0;
     }
 
     pub fn record(&mut self, result: &RequestResult) {
@@ -62,6 +79,20 @@ impl Stats {
 
         let latency = result.latency_us.min(60_000_000);
         let _ = self.histogram.record(latency);
+
+        // Record corrected latency and queue time if available
+        if let Some(queue_time) = result.queue_time_us {
+            let queue_time_clamped = queue_time.min(60_000_000);
+            let _ = self.queue_time_histogram.record(queue_time_clamped);
+            self.total_queue_time_us += queue_time;
+
+            // Corrected latency = total latency - queue wait time
+            if let Some(corrected) = result.corrected_latency_us() {
+                let corrected_clamped = corrected.min(60_000_000);
+                let _ = self.corrected_histogram.record(corrected_clamped);
+                self.corrected_samples += 1;
+            }
+        }
 
         if result.is_success() {
             self.successful += 1;
@@ -155,5 +186,35 @@ impl Stats {
 
     pub fn latency_percentile(&self, p: f64) -> u64 {
         self.histogram.value_at_percentile(p)
+    }
+
+    // Latency correction methods
+
+    pub fn has_corrected_latency(&self) -> bool {
+        self.corrected_samples > 0
+    }
+
+    pub fn corrected_latency_min(&self) -> u64 {
+        self.corrected_histogram.min()
+    }
+
+    pub fn corrected_latency_max(&self) -> u64 {
+        self.corrected_histogram.max()
+    }
+
+    pub fn corrected_latency_mean(&self) -> f64 {
+        self.corrected_histogram.mean()
+    }
+
+    pub fn corrected_latency_percentile(&self, p: f64) -> u64 {
+        self.corrected_histogram.value_at_percentile(p)
+    }
+
+    pub fn queue_time_mean(&self) -> f64 {
+        self.queue_time_histogram.mean()
+    }
+
+    pub fn queue_time_percentile(&self, p: f64) -> u64 {
+        self.queue_time_histogram.value_at_percentile(p)
     }
 }
