@@ -580,3 +580,113 @@ duration = "5s"
             .stderr(predicate::str::contains("https://example.com/api"));
     }
 }
+
+mod websocket_config {
+    use super::*;
+
+    #[test]
+    fn websocket_url_validates() {
+        let dir = tempdir().unwrap();
+        let config = dir.path().join("config.toml");
+
+        fs::write(
+            &config,
+            r#"
+[target]
+url = "ws://localhost:8080/ws"
+
+[load]
+concurrency = 10
+duration = "5s"
+"#,
+        )
+        .unwrap();
+
+        kaioken()
+            .args(["run", "-f", config.to_str().unwrap(), "--dry-run", "-y"])
+            .assert()
+            .success()
+            .stderr(predicate::str::contains("ws://localhost:8080/ws"));
+    }
+
+    #[test]
+    fn websocket_wss_url_validates() {
+        let dir = tempdir().unwrap();
+        let config = dir.path().join("config.toml");
+
+        fs::write(
+            &config,
+            r#"
+[target]
+url = "wss://example.com/socket"
+
+[load]
+concurrency = 5
+duration = "10s"
+"#,
+        )
+        .unwrap();
+
+        kaioken()
+            .args(["run", "-f", config.to_str().unwrap(), "--dry-run", "-y"])
+            .assert()
+            .success()
+            .stderr(predicate::str::contains("wss://example.com/socket"));
+    }
+
+    #[test]
+    fn websocket_config_section_validates() {
+        let dir = tempdir().unwrap();
+        let config = dir.path().join("config.toml");
+
+        fs::write(
+            &config,
+            r#"
+[target]
+url = "ws://localhost:8080/ws"
+
+[load]
+concurrency = 10
+duration = "5s"
+
+[websocket]
+message_interval = "50ms"
+mode = "echo"
+"#,
+        )
+        .unwrap();
+
+        kaioken()
+            .args(["run", "-f", config.to_str().unwrap(), "--dry-run", "-y"])
+            .assert()
+            .success();
+    }
+
+    #[test]
+    fn websocket_fire_and_forget_mode_validates() {
+        let dir = tempdir().unwrap();
+        let config = dir.path().join("config.toml");
+
+        fs::write(
+            &config,
+            r#"
+[target]
+url = "ws://localhost:8080/events"
+
+[load]
+concurrency = 20
+duration = "30s"
+
+[websocket]
+message_interval = "10ms"
+mode = "fire_and_forget"
+"#,
+        )
+        .unwrap();
+
+        kaioken()
+            .args(["run", "-f", config.to_str().unwrap(), "--dry-run", "-y"])
+            .assert()
+            .success();
+    }
+}

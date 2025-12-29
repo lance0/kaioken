@@ -23,6 +23,8 @@ pub struct JsonOutput {
     pub checks: Option<ChecksOutput>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub scenarios: Option<Vec<ScenarioOutput>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub websocket: Option<WebSocketOutput>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -137,6 +139,40 @@ pub struct QueueTime {
     pub mean: f64,
     pub p99: u64,
     pub total: u64,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct WebSocketOutput {
+    pub messages_sent: u64,
+    pub messages_received: u64,
+    pub bytes_sent: u64,
+    pub bytes_received: u64,
+    pub messages_per_sec: f64,
+    pub connections_active: u32,
+    pub connections_established: u64,
+    pub connection_errors: u64,
+    pub disconnects: u64,
+    pub error_rate: f64,
+    pub errors: HashMap<String, u64>,
+    pub latency_us: WsLatency,
+    pub connect_time_us: WsConnectTime,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct WsLatency {
+    pub min: u64,
+    pub max: u64,
+    pub mean: f64,
+    pub stddev: f64,
+    pub p50: u64,
+    pub p95: u64,
+    pub p99: u64,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct WsConnectTime {
+    pub mean: f64,
+    pub p99: u64,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -355,6 +391,41 @@ pub fn create_output(
                     })
                     .collect(),
             )
+        },
+        websocket: if snapshot.is_websocket {
+            let ws_errors: HashMap<String, u64> = snapshot
+                .ws_errors
+                .iter()
+                .map(|(k, v)| (format!("{:?}", k), *v))
+                .collect();
+            Some(WebSocketOutput {
+                messages_sent: snapshot.ws_messages_sent,
+                messages_received: snapshot.ws_messages_received,
+                bytes_sent: snapshot.ws_bytes_sent,
+                bytes_received: snapshot.ws_bytes_received,
+                messages_per_sec: snapshot.ws_messages_per_sec,
+                connections_active: snapshot.ws_connections_active,
+                connections_established: snapshot.ws_connections_established,
+                connection_errors: snapshot.ws_connection_errors,
+                disconnects: snapshot.ws_disconnects,
+                error_rate: snapshot.ws_error_rate,
+                errors: ws_errors,
+                latency_us: WsLatency {
+                    min: snapshot.ws_latency_min_us,
+                    max: snapshot.ws_latency_max_us,
+                    mean: snapshot.ws_latency_mean_us,
+                    stddev: snapshot.ws_latency_stddev_us,
+                    p50: snapshot.ws_latency_p50_us,
+                    p95: snapshot.ws_latency_p95_us,
+                    p99: snapshot.ws_latency_p99_us,
+                },
+                connect_time_us: WsConnectTime {
+                    mean: snapshot.ws_connect_time_mean_us,
+                    p99: snapshot.ws_connect_time_p99_us,
+                },
+            })
+        } else {
+            None
         },
     }
 }

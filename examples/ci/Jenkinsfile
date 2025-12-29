@@ -1,0 +1,110 @@
+// Kaioken Load Testing - Jenkins Pipeline Template
+//
+// This pipeline runs load tests against your API and fails if thresholds are breached.
+// Copy this to your repository as Jenkinsfile or include in your existing pipeline.
+
+pipeline {
+    agent any
+
+    parameters {
+        string(name: 'TARGET_URL', defaultValue: 'https://httpbin.org/get', description: 'API endpoint to test')
+        string(name: 'DURATION', defaultValue: '30s', description: 'Test duration')
+        string(name: 'CONCURRENCY', defaultValue: '50', description: 'Concurrent users')
+    }
+
+    environment {
+        KAIOKEN_VERSION = 'latest'
+    }
+
+    stages {
+        stage('Install kaioken') {
+            steps {
+                sh '''
+                    # Install from crates.io (requires Rust)
+                    if ! command -v kaioken &> /dev/null; then
+                        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+                        source $HOME/.cargo/env
+                        cargo install kaioken
+                    fi
+                '''
+            }
+        }
+
+        stage('Run Load Test') {
+            steps {
+                sh '''
+                    source $HOME/.cargo/env
+                    kaioken run "${TARGET_URL}" \
+                        -c ${CONCURRENCY} \
+                        -d ${DURATION} \
+                        --no-tui \
+                        -o results.json \
+                        -y
+                '''
+            }
+            post {
+                always {
+                    archiveArtifacts artifacts: 'results.json', fingerprint: true
+                }
+            }
+        }
+
+        stage('Check Thresholds') {
+            steps {
+                script {
+                    def results = readJSON file: 'results.json'
+                    def p99 = results.latency_us.p99
+                    def errorRate = results.summary.error_rate
+
+                    echo "P99 Latency: ${p99}us"
+                    echo "Error Rate: ${errorRate}"
+
+                    // Fail if p99 > 500ms
+                    if (p99 > 500000) {
+                        error "P99 latency ${p99}us exceeded 500ms threshold"
+                    }
+
+                    // Fail if error rate > 1%
+                    if (errorRate > 0.01) {
+                        error "Error rate ${errorRate} exceeded 1% threshold"
+                    }
+
+                    echo "All thresholds passed!"
+                }
+            }
+        }
+
+        stage('Regression Check') {
+            when {
+                changeRequest()
+            }
+            steps {
+                // Copy baseline from last successful main build
+                copyArtifacts(
+                    projectName: env.JOB_NAME.replace(env.BRANCH_NAME, 'main'),
+                    filter: 'results.json',
+                    target: 'baseline/',
+                    optional: true
+                )
+
+                sh '''
+                    if [ -f baseline/results.json ]; then
+                        source $HOME/.cargo/env
+                        kaioken compare baseline/results.json results.json \
+                            --threshold-p99 10 \
+                            --threshold-error-rate 50
+                    else
+                        echo "No baseline found, skipping regression check"
+                    fi
+                '''
+            }
+        }
+    }
+
+    post {
+        always {
+            // Publish performance trend (requires Performance Plugin)
+            // perfReport sourceDataFiles: 'results.json'
+        }
+    }
+}

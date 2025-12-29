@@ -16,6 +16,8 @@ pub struct TomlConfig {
     #[serde(default)]
     pub load: LoadSettings,
     #[serde(default)]
+    pub websocket: WebSocketConfig,
+    #[serde(default)]
     pub scenarios: Vec<ScenarioConfig>,
     #[serde(default)]
     pub thresholds: ThresholdsConfig,
@@ -127,6 +129,16 @@ pub struct LoadSettings {
     pub think_time: Option<Duration>,
     pub arrival_rate: Option<u32>,
     pub max_vus: Option<u32>,
+}
+
+#[derive(Debug, Deserialize, Default)]
+pub struct WebSocketConfig {
+    /// Message send interval (e.g., "100ms")
+    #[serde(default, with = "humantime_serde::option")]
+    pub message_interval: Option<Duration>,
+    /// Mode: "echo" (default) or "fire_and_forget"
+    #[serde(default)]
+    pub mode: Option<String>,
 }
 
 pub fn load_config(path: &Path) -> Result<TomlConfig, String> {
@@ -289,8 +301,66 @@ pub fn merge_config(args: &RunArgs, toml: Option<TomlConfig>) -> Result<LoadConf
 
     let insecure = args.insecure || toml.target.insecure;
     let http2 = args.http2 || toml.target.http2;
+    #[cfg(feature = "http3")]
+    let http3 = args.http3;
+    #[cfg(feature = "grpc")]
+    let grpc_service = args.grpc_service.clone();
+    #[cfg(feature = "grpc")]
+    let grpc_method = args.grpc_method.clone();
     let cookie_jar = args.cookie_jar || toml.target.cookie_jar;
     let follow_redirects = !args.no_follow_redirects && toml.target.follow_redirects;
+
+    // Validate HTTP/3 requires HTTPS
+    #[cfg(feature = "http3")]
+    if http3 && !url.starts_with("https://") {
+        return Err("HTTP/3 requires HTTPS URL (https://)".to_string());
+    }
+
+    // Validate gRPC configuration
+    #[cfg(feature = "grpc")]
+    {
+        let has_service = grpc_service
+            .as_ref()
+            .map(|s| !s.is_empty())
+            .unwrap_or(false);
+        let has_method = grpc_method
+            .as_ref()
+            .map(|s| !s.is_empty())
+            .unwrap_or(false);
+
+        if has_service != has_method {
+            return Err(
+                "Both --grpc-service and --grpc-method must be provided together".to_string(),
+            );
+        }
+
+        // Reject empty strings
+        if grpc_service.as_ref().map(|s| s.is_empty()).unwrap_or(false) {
+            return Err("--grpc-service cannot be empty".to_string());
+        }
+
+        // --insecure is not supported for gRPC
+        if has_service && insecure {
+            return Err(
+                "--insecure is not supported for gRPC. Use http:// URL for unencrypted connections."
+                    .to_string(),
+            );
+        }
+    }
+
+    // Detect protocol conflicts (HTTP/3 + gRPC)
+    #[cfg(all(feature = "http3", feature = "grpc"))]
+    {
+        let has_grpc = grpc_service
+            .as_ref()
+            .map(|s| !s.is_empty())
+            .unwrap_or(false);
+        if http3 && has_grpc {
+            return Err(
+                "Cannot use --http3 with --grpc-service. Choose one protocol.".to_string(),
+            );
+        }
+    }
 
     // Process scenarios
     let scenarios = process_scenarios(&toml.scenarios)?;
@@ -330,6 +400,24 @@ pub fn merge_config(args: &RunArgs, toml: Option<TomlConfig>) -> Result<LoadConf
     let latency_correction = !args.no_latency_correction
         && (arrival_rate.is_some() || stages.iter().any(|s| s.target_rate.is_some()));
 
+    // WebSocket config - CLI takes precedence
+    let ws_message_interval = if args.ws_message_interval != Duration::from_millis(100) {
+        args.ws_message_interval
+    } else {
+        toml.websocket
+            .message_interval
+            .unwrap_or(Duration::from_millis(100))
+    };
+
+    let ws_mode = if args.ws_fire_and_forget {
+        crate::types::WsMode::FireAndForget
+    } else {
+        match toml.websocket.mode.as_deref() {
+            Some("fire_and_forget") => crate::types::WsMode::FireAndForget,
+            _ => crate::types::WsMode::Echo,
+        }
+    };
+
     Ok(LoadConfig {
         url,
         method,
@@ -346,6 +434,12 @@ pub fn merge_config(args: &RunArgs, toml: Option<TomlConfig>) -> Result<LoadConf
         connect_timeout,
         insecure,
         http2,
+        #[cfg(feature = "http3")]
+        http3,
+        #[cfg(feature = "grpc")]
+        grpc_service,
+        #[cfg(feature = "grpc")]
+        grpc_method,
         cookie_jar,
         follow_redirects,
         thresholds,
@@ -356,6 +450,8 @@ pub fn merge_config(args: &RunArgs, toml: Option<TomlConfig>) -> Result<LoadConf
         arrival_rate,
         max_vus,
         latency_correction,
+        ws_mode,
+        ws_message_interval,
     })
 }
 

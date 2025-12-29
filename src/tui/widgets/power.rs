@@ -29,10 +29,79 @@ impl<'a> PowerWidget<'a> {
             .borders(Borders::ALL)
             .border_style(self.theme.border);
 
-        // Different display for arrival rate mode vs closed model
+        // Different display for WebSocket, arrival rate mode, or closed model
+        let is_websocket = self.snapshot.is_websocket;
         let is_arrival_rate_mode = self.snapshot.vus_max > 0;
 
-        let mut lines = if is_arrival_rate_mode {
+        let mut lines = if is_websocket {
+            // WebSocket mode
+            let rank = self.flavor.power_rank(self.snapshot.ws_rolling_mps);
+            let rank_style = if self.snapshot.ws_rolling_mps > 9000.0 {
+                self.theme.highlight
+            } else {
+                self.theme.muted
+            };
+
+            vec![
+                Line::from(vec![
+                    Span::styled("Load Model:  ", self.theme.normal),
+                    Span::styled("WebSocket", self.theme.highlight),
+                ]),
+                Line::from(vec![
+                    Span::styled("Messages/s:  ", self.theme.normal),
+                    Span::styled(
+                        format!("{:>6.0}", self.snapshot.ws_rolling_mps),
+                        self.theme.highlight,
+                    ),
+                    Span::raw("  "),
+                    Span::styled(format!("[{}]", rank), rank_style),
+                ]),
+                Line::from(vec![
+                    Span::styled("Connections: ", self.theme.normal),
+                    Span::styled(
+                        format!(
+                            "{:>4} active  {} established",
+                            self.snapshot.ws_connections_active,
+                            self.snapshot.ws_connections_established
+                        ),
+                        self.theme.normal,
+                    ),
+                ]),
+                Line::from(vec![
+                    Span::styled("Messages:    ", self.theme.normal),
+                    Span::styled(
+                        format!(
+                            "sent {} / recv {}",
+                            format_number(self.snapshot.ws_messages_sent),
+                            format_number(self.snapshot.ws_messages_received)
+                        ),
+                        self.theme.normal,
+                    ),
+                ]),
+                Line::from(vec![
+                    Span::styled("Errors:      ", self.theme.normal),
+                    Span::styled(
+                        format!("{:.2}%", self.snapshot.ws_error_rate * 100.0),
+                        if self.snapshot.ws_error_rate > 0.05 {
+                            self.theme.error
+                        } else if self.snapshot.ws_error_rate > 0.01 {
+                            self.theme.warning
+                        } else {
+                            self.theme.success
+                        },
+                    ),
+                    Span::styled("  Disconnects: ", self.theme.normal),
+                    Span::styled(
+                        format!("{}", self.snapshot.ws_disconnects),
+                        if self.snapshot.ws_disconnects > 0 {
+                            self.theme.warning
+                        } else {
+                            self.theme.success
+                        },
+                    ),
+                ]),
+            ]
+        } else if is_arrival_rate_mode {
             // Open model (arrival rate) - show achieved vs target
             let achieved_rate = self.snapshot.rolling_rps;
             let target_rate = self.snapshot.target_rate as f64;

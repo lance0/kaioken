@@ -1,0 +1,154 @@
+# Kaioken Load Testing - GitHub Actions Template
+#
+# This workflow runs load tests against your API and fails if thresholds are breached.
+# Copy this file to .github/workflows/load-test.yml in your repository.
+#
+# Features:
+# - Runs load tests on push to main or PR
+# - Regression detection against baseline
+# - Threshold-based pass/fail for CI gating
+# - Artifacts: JSON results and optional HTML reports
+
+name: Load Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  # Manual trigger with custom parameters
+  workflow_dispatch:
+    inputs:
+      duration:
+        description: 'Test duration (e.g., 30s, 1m, 5m)'
+        required: false
+        default: '30s'
+      concurrency:
+        description: 'Number of concurrent users'
+        required: false
+        default: '50'
+
+env:
+  # Your API endpoint - use secrets for sensitive URLs
+  TARGET_URL: ${{ secrets.LOAD_TEST_URL || 'https://httpbin.org/get' }}
+
+jobs:
+  load-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-action@stable
+
+      - name: Install kaioken
+        run: |
+          # Option 1: Install from crates.io
+          cargo install kaioken
+
+          # Option 2: Download prebuilt binary (faster)
+          # curl -sSL https://github.com/your-org/kaioken/releases/latest/download/kaioken-linux-x64 -o kaioken
+          # chmod +x kaioken
+          # sudo mv kaioken /usr/local/bin/
+
+      - name: Run load test
+        run: |
+          kaioken run "$TARGET_URL" \
+            -c ${{ github.event.inputs.concurrency || '50' }} \
+            -d ${{ github.event.inputs.duration || '30s' }} \
+            --no-tui \
+            -o results.json \
+            -y
+        continue-on-error: true  # Don't fail yet, check thresholds first
+
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: load-test-results
+          path: results.json
+          retention-days: 30
+
+      - name: Check thresholds
+        run: |
+          # Extract key metrics and check thresholds
+          P99=$(jq '.latency_us.p99' results.json)
+          ERROR_RATE=$(jq '.summary.error_rate' results.json)
+
+          echo "P99 Latency: ${P99}us"
+          echo "Error Rate: ${ERROR_RATE}"
+
+          # Fail if p99 > 500ms or error rate > 1%
+          if (( $(echo "$P99 > 500000" | bc -l) )); then
+            echo "::error::P99 latency exceeded 500ms threshold"
+            exit 1
+          fi
+
+          if (( $(echo "$ERROR_RATE > 0.01" | bc -l) )); then
+            echo "::error::Error rate exceeded 1% threshold"
+            exit 1
+          fi
+
+          echo "All thresholds passed!"
+
+  # Optional: Compare against baseline for regression detection
+  regression-check:
+    runs-on: ubuntu-latest
+    needs: load-test
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-action@stable
+
+      - name: Install kaioken
+        run: cargo install kaioken
+
+      - name: Download current results
+        uses: actions/download-artifact@v4
+        with:
+          name: load-test-results
+          path: current/
+
+      - name: Download baseline (from main branch)
+        uses: dawidd6/action-download-artifact@v3
+        with:
+          workflow: load-test.yml
+          branch: main
+          name: load-test-results
+          path: baseline/
+        continue-on-error: true  # Baseline might not exist yet
+
+      - name: Compare results
+        if: hashFiles('baseline/results.json') != ''
+        run: |
+          kaioken compare baseline/results.json current/results.json \
+            --threshold-p99 10 \
+            --threshold-error-rate 50
+        # Exit code 3 = regression detected
+
+---
+# Alternative: Using a kaioken config file
+#
+# Create kaioken.toml in your repo:
+#
+# [target]
+# url = "https://api.example.com/health"
+# method = "GET"
+# timeout = "5s"
+#
+# [load]
+# concurrency = 50
+# duration = "30s"
+# warmup = "5s"
+#
+# [thresholds]
+# p99_latency_ms = "< 500"
+# error_rate = "< 0.01"
+#
+# Then run:
+#   kaioken run -f kaioken.toml --no-tui -o results.json -y

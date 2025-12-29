@@ -217,6 +217,114 @@ impl ErrorKind {
     }
 }
 
+// ============================================================================
+// WebSocket Types
+// ============================================================================
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WsMode {
+    #[default]
+    Echo,
+    FireAndForget,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WsErrorKind {
+    ConnectFailed,
+    HandshakeFailed,
+    Timeout,
+    ConnectionClosed,
+    SendFailed,
+    ReceiveFailed,
+    ProtocolError,
+    Tls,
+    Other,
+}
+
+impl WsErrorKind {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            WsErrorKind::ConnectFailed => "connect_failed",
+            WsErrorKind::HandshakeFailed => "handshake_failed",
+            WsErrorKind::Timeout => "timeout",
+            WsErrorKind::ConnectionClosed => "connection_closed",
+            WsErrorKind::SendFailed => "send_failed",
+            WsErrorKind::ReceiveFailed => "receive_failed",
+            WsErrorKind::ProtocolError => "protocol_error",
+            WsErrorKind::Tls => "tls",
+            WsErrorKind::Other => "other",
+        }
+    }
+
+    pub fn suggestion(&self) -> &'static str {
+        match self {
+            WsErrorKind::ConnectFailed => "check server is running and URL is correct",
+            WsErrorKind::HandshakeFailed => "server may not support WebSocket",
+            WsErrorKind::Timeout => "try increasing --timeout",
+            WsErrorKind::ConnectionClosed => "server closed connection unexpectedly",
+            WsErrorKind::SendFailed => "failed to send message",
+            WsErrorKind::ReceiveFailed => "failed to receive response",
+            WsErrorKind::ProtocolError => "WebSocket protocol error",
+            WsErrorKind::Tls => "try ws:// instead of wss://",
+            WsErrorKind::Other => "",
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct WsMessageResult {
+    pub message_latency_us: u64,
+    pub connect_time_us: Option<u64>, // Only set on first message after connect
+    pub bytes_sent: u64,
+    pub bytes_received: u64,
+    pub response: Option<String>,
+    pub error: Option<WsErrorKind>,
+}
+
+impl WsMessageResult {
+    pub fn success(message_latency_us: u64, bytes_sent: u64, bytes_received: u64) -> Self {
+        Self {
+            message_latency_us,
+            connect_time_us: None,
+            bytes_sent,
+            bytes_received,
+            response: None,
+            error: None,
+        }
+    }
+
+    pub fn with_connect_time(mut self, connect_time_us: u64) -> Self {
+        self.connect_time_us = Some(connect_time_us);
+        self
+    }
+
+    pub fn with_response(mut self, response: String) -> Self {
+        self.response = Some(response);
+        self
+    }
+
+    pub fn error(error: WsErrorKind) -> Self {
+        Self {
+            message_latency_us: 0,
+            connect_time_us: None,
+            bytes_sent: 0,
+            bytes_received: 0,
+            response: None,
+            error: Some(error),
+        }
+    }
+
+    pub fn is_success(&self) -> bool {
+        self.error.is_none()
+    }
+}
+
+// ============================================================================
+// HTTP Request Result
+// ============================================================================
+
 #[derive(Debug, Clone)]
 pub struct RequestResult {
     pub latency_us: u64,
@@ -339,6 +447,32 @@ pub struct StatsSnapshot {
     pub queue_time_mean_us: Option<f64>,
     pub queue_time_p99_us: Option<u64>,
     pub total_queue_time_us: u64,
+
+    // WebSocket metrics (v1.2)
+    pub is_websocket: bool,
+    pub ws_messages_sent: u64,
+    pub ws_messages_received: u64,
+    pub ws_bytes_sent: u64,
+    pub ws_bytes_received: u64,
+    pub ws_connections_active: u32,
+    pub ws_connections_established: u64,
+    pub ws_connection_errors: u64,
+    pub ws_disconnects: u64,
+    pub ws_messages_per_sec: f64,
+    pub ws_rolling_mps: f64,
+    pub ws_error_rate: f64,
+    pub ws_errors: HashMap<WsErrorKind, u64>,
+    // Message latency (RTT in echo mode)
+    pub ws_latency_min_us: u64,
+    pub ws_latency_max_us: u64,
+    pub ws_latency_mean_us: f64,
+    pub ws_latency_stddev_us: f64,
+    pub ws_latency_p50_us: u64,
+    pub ws_latency_p95_us: u64,
+    pub ws_latency_p99_us: u64,
+    // Connection time
+    pub ws_connect_time_mean_us: f64,
+    pub ws_connect_time_p99_us: u64,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -424,6 +558,12 @@ pub struct LoadConfig {
     pub connect_timeout: Duration,
     pub insecure: bool,
     pub http2: bool,
+    #[cfg(feature = "http3")]
+    pub http3: bool,
+    #[cfg(feature = "grpc")]
+    pub grpc_service: Option<String>,
+    #[cfg(feature = "grpc")]
+    pub grpc_method: Option<String>,
     pub cookie_jar: bool,
     pub follow_redirects: bool,
     pub thresholds: Vec<Threshold>,
@@ -434,6 +574,9 @@ pub struct LoadConfig {
     pub arrival_rate: Option<u32>, // Requests per second
     pub max_vus: Option<u32>,      // Max concurrent requests
     pub latency_correction: bool,  // Enable latency correction (auto for arrival_rate)
+    // WebSocket options
+    pub ws_mode: WsMode,
+    pub ws_message_interval: Duration,
 }
 
 impl Default for LoadConfig {
@@ -454,6 +597,12 @@ impl Default for LoadConfig {
             connect_timeout: Duration::from_secs(2),
             insecure: false,
             http2: false,
+            #[cfg(feature = "http3")]
+            http3: false,
+            #[cfg(feature = "grpc")]
+            grpc_service: None,
+            #[cfg(feature = "grpc")]
+            grpc_method: None,
             cookie_jar: false,
             follow_redirects: true,
             thresholds: Vec::new(),
@@ -464,6 +613,8 @@ impl Default for LoadConfig {
             arrival_rate: None,
             max_vus: None,
             latency_correction: false,
+            ws_mode: WsMode::default(),
+            ws_message_interval: Duration::from_millis(100),
         }
     }
 }

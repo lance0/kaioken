@@ -1,0 +1,126 @@
+# Kaioken Load Testing - GitLab CI Template
+#
+# This pipeline runs load tests against your API and fails if thresholds are breached.
+# Copy this to your .gitlab-ci.yml or include it via `include:`.
+#
+# Features:
+# - Runs load tests on merge requests and main branch
+# - Regression detection against baseline
+# - Threshold-based pass/fail for CI gating
+# - Artifacts: JSON results stored for comparison
+
+stages:
+  - test
+  - compare
+
+variables:
+  # Your API endpoint - use CI/CD variables for sensitive URLs
+  TARGET_URL: ${LOAD_TEST_URL:-"https://httpbin.org/get"}
+  DURATION: "30s"
+  CONCURRENCY: "50"
+
+.install_kaioken: &install_kaioken
+  before_script:
+    - |
+      # Install dependencies for threshold checks
+      apt-get update && apt-get install -y jq bc
+
+      # Install kaioken (rust:latest image already has Rust)
+      cargo install kaioken
+
+      # Alternative: Download prebuilt binary (faster)
+      # curl -sSL https://github.com/your-org/kaioken/releases/latest/download/kaioken-linux-x64 -o /usr/local/bin/kaioken
+      # chmod +x /usr/local/bin/kaioken
+
+load-test:
+  stage: test
+  image: rust:latest
+  <<: *install_kaioken
+  script:
+    - |
+      kaioken run "$TARGET_URL" \
+        -c $CONCURRENCY \
+        -d $DURATION \
+        --no-tui \
+        -o results.json \
+        -y
+
+      # Check thresholds inline
+      P99=$(jq '.latency_us.p99' results.json)
+      ERROR_RATE=$(jq '.summary.error_rate' results.json)
+
+      echo "P99 Latency: ${P99}us"
+      echo "Error Rate: ${ERROR_RATE}"
+
+      # Fail if p99 > 500ms
+      if [ $(echo "$P99 > 500000" | bc) -eq 1 ]; then
+        echo "P99 latency exceeded 500ms threshold"
+        exit 1
+      fi
+
+      # Fail if error rate > 1%
+      if [ $(echo "$ERROR_RATE > 0.01" | bc) -eq 1 ]; then
+        echo "Error rate exceeded 1% threshold"
+        exit 1
+      fi
+
+      echo "All thresholds passed!"
+  artifacts:
+    paths:
+      - results.json
+    expire_in: 30 days
+    reports:
+      # GitLab can parse the JSON for metrics
+      metrics: results.json
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+# Regression detection for merge requests
+regression-check:
+  stage: compare
+  image: rust:latest
+  <<: *install_kaioken
+  script:
+    - |
+      # Download baseline from main branch (last successful pipeline)
+      curl --header "JOB-TOKEN: $CI_JOB_TOKEN" \
+        "$CI_API_V4_URL/projects/$CI_PROJECT_ID/jobs/artifacts/$CI_DEFAULT_BRANCH/raw/results.json?job=load-test" \
+        -o baseline.json || echo "No baseline found"
+
+      if [ -f baseline.json ]; then
+        echo "Comparing against baseline..."
+        kaioken compare baseline.json results.json \
+          --threshold-p99 10 \
+          --threshold-error-rate 50 || exit 3
+      else
+        echo "No baseline found, skipping regression check"
+      fi
+  dependencies:
+    - load-test
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  allow_failure: true  # Don't block MR if no baseline exists
+
+---
+# Alternative: Using a kaioken config file with thresholds
+#
+# Create kaioken.toml in your repo:
+#
+# [target]
+# url = "https://api.example.com/health"
+#
+# [load]
+# concurrency = 50
+# duration = "30s"
+#
+# [thresholds]
+# p99_latency_ms = "< 500"
+# error_rate = "< 0.01"
+#
+# Then simplify the job:
+#
+# load-test:
+#   script:
+#     - kaioken run -f kaioken.toml --no-tui -o results.json -y
+#   # Exit code 4 = thresholds failed

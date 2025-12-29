@@ -18,6 +18,11 @@ impl<'a> LatencyWidget<'a> {
     }
 
     pub fn render(&self, frame: &mut Frame, area: Rect) {
+        // Check if this is a WebSocket test
+        if self.snapshot.is_websocket {
+            return self.render_websocket(frame, area);
+        }
+
         // Use corrected latency if available, otherwise fall back to wall-clock
         let use_corrected = self.snapshot.latency_correction_enabled
             && self.snapshot.corrected_latency_p50_us.is_some();
@@ -79,6 +84,73 @@ impl<'a> LatencyWidget<'a> {
                 ])
             })
             .collect();
+
+        let paragraph = Paragraph::new(lines).block(block);
+        frame.render_widget(paragraph, area);
+    }
+
+    fn render_websocket(&self, frame: &mut Frame, area: Rect) {
+        let block = Block::default()
+            .title(" WS MESSAGE LATENCY (ms) ")
+            .title_style(self.theme.header)
+            .borders(Borders::ALL)
+            .border_style(self.theme.border);
+
+        let p50 = self.snapshot.ws_latency_p50_us;
+        let p95 = self.snapshot.ws_latency_p95_us;
+        let p99 = self.snapshot.ws_latency_p99_us;
+        let connect_mean = self.snapshot.ws_connect_time_mean_us;
+        let connect_p99 = self.snapshot.ws_connect_time_p99_us;
+
+        let max_latency = p99.max(1) as f64;
+
+        let lines = vec![
+            {
+                let ms = p50 as f64 / 1000.0;
+                let bar_width = ((p50 as f64 / max_latency) * 15.0) as usize;
+                let bar: String = "█".repeat(bar_width.min(15));
+                Line::from(vec![
+                    Span::styled(" p50: ", self.theme.normal),
+                    Span::styled(format!("{:>6.1}", ms), self.latency_style(ms)),
+                    Span::raw("  "),
+                    Span::styled(bar, self.theme.bar_filled),
+                ])
+            },
+            {
+                let ms = p95 as f64 / 1000.0;
+                let bar_width = ((p95 as f64 / max_latency) * 15.0) as usize;
+                let bar: String = "█".repeat(bar_width.min(15));
+                Line::from(vec![
+                    Span::styled(" p95: ", self.theme.normal),
+                    Span::styled(format!("{:>6.1}", ms), self.latency_style(ms)),
+                    Span::raw("  "),
+                    Span::styled(bar, self.theme.bar_filled),
+                ])
+            },
+            {
+                let ms = p99 as f64 / 1000.0;
+                let bar_width = ((p99 as f64 / max_latency) * 15.0) as usize;
+                let bar: String = "█".repeat(bar_width.min(15));
+                Line::from(vec![
+                    Span::styled(" p99: ", self.theme.normal),
+                    Span::styled(format!("{:>6.1}", ms), self.latency_style(ms)),
+                    Span::raw("  "),
+                    Span::styled(bar, self.theme.bar_filled),
+                ])
+            },
+            Line::from(""),
+            Line::from(vec![
+                Span::styled("Connect time: ", self.theme.muted),
+                Span::styled(
+                    format!(
+                        "mean {:.1}ms  p99 {:.1}ms",
+                        connect_mean / 1000.0,
+                        connect_p99 as f64 / 1000.0
+                    ),
+                    self.theme.normal,
+                ),
+            ]),
+        ];
 
         let paragraph = Paragraph::new(lines).block(block);
         frame.render_widget(paragraph, area);

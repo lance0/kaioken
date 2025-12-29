@@ -1,6 +1,6 @@
 [package]
 name = "kaioken"
-version = "1.0.0"
+version = "1.1.0"
 edition = "2024"
 description = "A Rust-based HTTP load testing tool with real-time terminal UI and DBZ flavor"
 license = "MIT OR Apache-2.0"
@@ -8,9 +8,16 @@ repository = "https://github.com/lance0/kaioken"
 keywords = ["load-testing", "http", "benchmark", "tui"]
 categories = ["command-line-utilities", "development-tools::profiling"]
 
+[features]
+default = []
+http3 = ["h3", "h3-quinn", "quinn", "rustls", "rustls-pemfile", "rustls-native-certs", "bytes", "http"]
+grpc = ["tonic", "prost", "prost-types", "bytes"]
+
 [dependencies]
 tokio = { version = "1", features = ["full"] }
 reqwest = { version = "0.12", features = ["gzip", "brotli", "rustls-tls", "cookies"] }
+tokio-tungstenite = { version = "0.26", features = ["rustls-tls-webpki-roots"] }
+futures-util = "0.3"
 clap = { version = "4", features = ["derive"] }
 clap_complete = "4"
 clap_mangen = "0.2"
@@ -31,6 +38,21 @@ regex-lite = "0.1"
 chrono = { version = "0.4", features = ["serde"] }
 hostname = "0.4"
 jsonpath-rust = "1.0.4"
+
+# HTTP/3 support (optional, enable with --features http3)
+h3 = { version = "0.0.8", optional = true }
+h3-quinn = { version = "0.0.10", optional = true }
+quinn = { version = "0.11", optional = true }
+rustls = { version = "0.23", optional = true, default-features = false, features = ["ring", "std"] }
+rustls-pemfile = { version = "2", optional = true }
+rustls-native-certs = { version = "0.8", optional = true }
+bytes = { version = "1", optional = true }
+http = { version = "1", optional = true }
+
+# gRPC support (optional, enable with --features grpc)
+tonic = { version = "0.12", optional = true, features = ["tls", "channel"] }
+prost = { version = "0.13", optional = true }
+prost-types = { version = "0.13", optional = true }
 
 [dev-dependencies]
 wiremock = "0.6"

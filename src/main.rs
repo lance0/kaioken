@@ -2,10 +2,16 @@ mod cli;
 mod compare;
 mod config;
 mod engine;
+#[cfg(feature = "grpc")]
+mod grpc;
 mod http;
+#[cfg(feature = "http3")]
+mod http3;
+mod import;
 mod output;
 mod tui;
 mod types;
+mod ws;
 
 use clap::Parser;
 use cli::{Cli, Commands, RunArgs};
@@ -47,6 +53,10 @@ async fn run() -> Result<i32, String> {
         Commands::Run(args) => run_load_test(&args).await,
         Commands::Compare(args) => run_compare(&args),
         Commands::Init(args) => run_init(&args),
+        Commands::Import(args) => {
+            import::run_import(&args)?;
+            Ok(0)
+        }
         Commands::Completions(args) => {
             cli::generate_completions(args.shell);
             Ok(0)

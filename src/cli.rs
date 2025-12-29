@@ -33,6 +33,9 @@ pub enum Commands {
     /// Generate a starter config file
     Init(InitArgs),
 
+    /// Import scenarios from external formats (HAR, Postman, OpenAPI)
+    Import(ImportArgs),
+
     /// Generate shell completions
     Completions(CompletionsArgs),
 
@@ -46,7 +49,7 @@ impl Default for Commands {
     }
 }
 
-#[derive(Parser, Debug, Default)]
+#[derive(Parser, Debug)]
 pub struct RunArgs {
     /// Target URL to load test
     #[arg(required_unless_present = "config")]
@@ -107,6 +110,21 @@ pub struct RunArgs {
     /// Use HTTP/2 (default: HTTP/1.1)
     #[arg(long)]
     pub http2: bool,
+
+    /// Use HTTP/3 (QUIC) - requires --features http3
+    #[cfg(feature = "http3")]
+    #[arg(long)]
+    pub http3: bool,
+
+    /// gRPC service name (e.g., "helloworld.Greeter") - requires --features grpc
+    #[cfg(feature = "grpc")]
+    #[arg(long)]
+    pub grpc_service: Option<String>,
+
+    /// gRPC method name (e.g., "SayHello") - requires --features grpc
+    #[cfg(feature = "grpc")]
+    #[arg(long)]
+    pub grpc_method: Option<String>,
 
     /// Enable cookie jar for automatic session handling
     #[arg(long)]
@@ -171,6 +189,61 @@ pub struct RunArgs {
     /// Abort immediately when any threshold fails
     #[arg(long)]
     pub fail_fast: bool,
+
+    // WebSocket options
+    /// WebSocket message send interval (e.g., 100ms)
+    #[arg(long, default_value = "100ms", value_parser = parse_duration)]
+    pub ws_message_interval: Duration,
+
+    /// WebSocket fire-and-forget mode (don't wait for response)
+    #[arg(long)]
+    pub ws_fire_and_forget: bool,
+}
+
+impl Default for RunArgs {
+    fn default() -> Self {
+        Self {
+            url: None,
+            concurrency: 50,
+            duration: Duration::from_secs(10),
+            rate: 0,
+            ramp_up: Duration::ZERO,
+            warmup: Duration::ZERO,
+            think_time: None,
+            timeout: Duration::from_secs(5),
+            connect_timeout: Duration::from_secs(2),
+            method: "GET".to_string(),
+            headers: Vec::new(),
+            body: None,
+            body_file: None,
+            max_requests: 0,
+            http2: false,
+            #[cfg(feature = "http3")]
+            http3: false,
+            #[cfg(feature = "grpc")]
+            grpc_service: None,
+            #[cfg(feature = "grpc")]
+            grpc_method: None,
+            cookie_jar: false,
+            arrival_rate: None,
+            max_vus: 100,
+            no_latency_correction: false,
+            no_follow_redirects: false,
+            config: None,
+            output: None,
+            format: "json".to_string(),
+            no_tui: false,
+            json: false,
+            quiet: false,
+            serious: false,
+            insecure: false,
+            yes: false,
+            dry_run: false,
+            fail_fast: false,
+            ws_message_interval: Duration::from_millis(100),
+            ws_fire_and_forget: false,
+        }
+    }
 }
 
 #[derive(Parser, Debug)]
@@ -208,6 +281,38 @@ pub struct CompareArgs {
     /// Force comparison even if load models differ (open vs closed)
     #[arg(long)]
     pub force: bool,
+}
+
+#[derive(Parser, Debug)]
+pub struct ImportArgs {
+    /// Input file to import (HAR, Postman collection, or OpenAPI spec)
+    pub input: PathBuf,
+
+    /// Output file path (default: kaioken.toml)
+    #[arg(short, long, default_value = "kaioken.toml")]
+    pub output: PathBuf,
+
+    /// Import format (auto-detected from extension if not specified)
+    #[arg(short, long, value_enum)]
+    pub format: Option<ImportFormat>,
+
+    /// Filter requests by URL pattern (regex)
+    #[arg(long)]
+    pub filter: Option<String>,
+
+    /// Overwrite existing output file
+    #[arg(long)]
+    pub force: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
+pub enum ImportFormat {
+    /// HAR (HTTP Archive) format from browser DevTools
+    Har,
+    /// Postman Collection v2.1
+    Postman,
+    /// OpenAPI 3.x specification
+    Openapi,
 }
 
 impl RunArgs {

@@ -40,16 +40,59 @@ A Rust-based HTTP load testing tool with real-time terminal UI and DBZ flavor.
 | **Weighted scenarios** | ✅ | ✅ | ❌ | ❌ | ✅ |
 | **Cookie jar** | ✅ | ✅ | ❌ | ❌ | ✅ |
 | **HTTP/2** | ✅ | ✅ | ✅ | ❌ | ✅ |
-| **HTTP/3** | ❌ | ❌ | ✅ | ❌ | ❌ |
+| **HTTP/3** | ✅* | ❌ | ✅ | ❌ | ❌ |
+| **WebSocket** | ✅ | ✅ | ❌ | ❌ | ✅ |
+| **gRPC** | ✅* | ✅ | ❌ | ❌ | ✅ |
 | **Config file** | TOML | JS | ❌ | Lua | Scala |
 | **Language** | Rust | Go | Rust | C | Scala |
+
+*\* Experimental feature*
 
 **kaioken strengths:** Real-time visibility, regression detection, CI/CD thresholds, load stages, request chaining, latency correction, memorable UX
 
 ## Installation
 
+### Pre-built binaries (recommended)
+
+Download from [GitHub Releases](https://github.com/lance0/kaioken/releases):
+
+```bash
+# Linux x86_64
+curl -LO https://github.com/lance0/kaioken/releases/latest/download/kaioken-linux-x86_64.tar.gz
+tar xzf kaioken-linux-x86_64.tar.gz
+sudo mv kaioken /usr/local/bin/
+
+# macOS (Apple Silicon)
+curl -LO https://github.com/lance0/kaioken/releases/latest/download/kaioken-macos-aarch64.tar.gz
+tar xzf kaioken-macos-aarch64.tar.gz
+sudo mv kaioken /usr/local/bin/
+
+# macOS (Intel)
+curl -LO https://github.com/lance0/kaioken/releases/latest/download/kaioken-macos-x86_64.tar.gz
+tar xzf kaioken-macos-x86_64.tar.gz
+sudo mv kaioken /usr/local/bin/
+```
+
+### Homebrew (macOS/Linux)
+
+```bash
+brew tap lance0/kaioken
+brew install kaioken
+```
+
+### Cargo (from source)
+
 ```bash
 cargo install kaioken
+
+# With HTTP/3 support (experimental)
+cargo install kaioken --features http3
+
+# With gRPC support (experimental)
+cargo install kaioken --features grpc
+
+# With all features
+cargo install kaioken --features "http3 grpc"
 ```
 
 ## Quick Start
@@ -122,6 +165,9 @@ kaioken run [OPTIONS] [URL]
 | `--serious` | false | Disable DBZ flavor |
 | `--insecure` | false | Skip TLS verification |
 | `-y, --yes` | false | Skip remote target confirmation |
+| `--http3` | false | Use HTTP/3 (QUIC) - experimental |
+| `--grpc-service` | — | gRPC service name (experimental) |
+| `--grpc-method` | — | gRPC method name (experimental) |
 
 ### `kaioken compare`
 
@@ -172,6 +218,34 @@ man -l kaioken.1
 ```
 
 Generate man page in roff format.
+
+### `kaioken import`
+
+```
+kaioken import <FILE> [OPTIONS]
+```
+
+Convert HAR (HTTP Archive) files from browser DevTools to kaioken config.
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `<FILE>` | — | HAR file to import |
+| `-o, --output` | kaioken.toml | Output file path |
+| `--filter` | — | URL regex filter (e.g., "api/v2") |
+
+```bash
+# Import from Chrome DevTools HAR export
+kaioken import recording.har -o load-test.toml
+
+# Filter by URL pattern
+kaioken import api.har --filter "api/v2" -o filtered.toml
+```
+
+The importer:
+- Auto-detects format from file extension
+- Preserves headers, body, and method from HAR entries
+- Creates weighted scenarios from duplicate requests
+- Filters browser-specific headers (cookies, sec-*, etc.)
 
 ## Config File
 
@@ -442,6 +516,65 @@ kaioken run 'https://api.example.com/items/${REQUEST_ID}' \
   -H 'X-Request-ID: ${REQUEST_ID}' \
   -b '{"ts": ${TIMESTAMP_MS}}'
 ```
+
+## WebSocket Testing
+
+Test WebSocket endpoints with echo or fire-and-forget modes:
+
+```bash
+# Echo mode (default) - measure RTT
+kaioken run ws://localhost:8080/ws -c 100 -d 30s -b '{"type":"ping"}'
+
+# Fire-and-forget - measure throughput
+kaioken run ws://localhost:8080/events -c 50 --ws-fire-and-forget
+```
+
+TOML config:
+```toml
+[target]
+url = "wss://api.example.com/ws"
+
+[websocket]
+message_interval = "100ms"
+mode = "echo"  # or "fire_and_forget"
+```
+
+## HTTP/3 (Experimental)
+
+Build with HTTP/3 support and use QUIC transport:
+
+```bash
+cargo install kaioken --features http3
+
+kaioken run https://quic.example.com --http3
+```
+
+Requires the target server to support HTTP/3.
+
+**Limitations:** HTTP/3 mode uses simple constant-VU execution. Options like
+`--arrival-rate`, `--rate`, `--think-time`, `--ramp-up`, and `[[scenarios]]`
+are ignored. Use standard HTTP mode for these features.
+
+## gRPC (Experimental)
+
+Build with gRPC support to load test gRPC services:
+
+```bash
+cargo install kaioken --features grpc
+
+# Unary call
+kaioken run https://localhost:50051 \
+  --grpc-service "helloworld.Greeter" \
+  --grpc-method "SayHello" \
+  -b 'raw protobuf bytes here' \
+  -c 50 -d 30s
+```
+
+Supports unary calls and server streaming. The request body should be **raw protobuf-encoded bytes**. For simple testing with text-based services, you can pass plain text. JSON-to-protobuf conversion is not currently supported.
+
+**Limitations:** gRPC mode uses simple constant-VU execution. Options like
+`--arrival-rate`, `--rate`, `--think-time`, `--ramp-up`, and `[[scenarios]]` are ignored.
+The `--insecure` flag is not supported; use `http://` URLs for unencrypted connections.
 
 ## CI Integration
 

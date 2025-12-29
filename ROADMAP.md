@@ -18,9 +18,9 @@ Fast local load testing against HTTP endpoints with zero setup friction, real-ti
 | **Request Chaining** | ✅ | ✅ | ❌ | ❌ | ✅ |
 | **Multi-scenario** | ✅ | ✅ | ❌ | ❌ | ✅ |
 | **Latency Correction** | ✅ | ❌ | ✅ | ❌ | ❌ |
-| **HTTP/3** | 🔜 v1.3 | ❌ | ✅ | ❌ | ❌ |
-| **WebSocket** | 🔜 v1.2 | ✅ | ❌ | ❌ | ✅ |
-| **gRPC** | 🔜 v1.3 | ✅ | ❌ | ❌ | ✅ |
+| **HTTP/3** | ✅* | ❌ | ✅ | ❌ | ❌ |
+| **WebSocket** | ✅ | ✅ | ❌ | ❌ | ✅ |
+| **gRPC** | ✅* | ✅ | ❌ | ❌ | ✅ |
 | **Prometheus Export** | 🔜 v1.4 | ✅ | ❌ | ❌ | ✅ |
 | **Language** | Rust | Go | Rust | C | Scala |
 
@@ -137,7 +137,7 @@ Fast local load testing against HTTP endpoints with zero setup friction, real-ti
 - [x] CLI flags: `--arrival-rate` and `--max-vus`
 - [x] TUI display for VUs active/max and dropped iterations
 
-### v1.1 — Accuracy & Distribution
+### v1.0.1 — Accuracy ✓
 
 - [x] **Latency correction** - Avoid coordinated omission problem
   - Auto-enabled for arrival rate mode, disable with `--no-latency-correction`
@@ -145,27 +145,29 @@ Fast local load testing against HTTP endpoints with zero setup friction, real-ti
   - TUI shows `[corrected]` indicator when active
 - [x] **Redirect control** - `follow_redirects = false` option
 - [x] **Improved error messages** - Suggestions for common mistakes
-- [ ] **Package distribution**:
-  - [x] Publish to crates.io (`cargo install kaioken`)
-  - [ ] Homebrew formula
-  - [ ] GitHub releases with prebuilt binaries
-  - [ ] Docker image
 
-### v1.2 — WebSocket Support
+### v1.0.2 — WebSocket Support ✓
 
-- [ ] **WebSocket connections** - `ws://` and `wss://` protocol support
-- [ ] **Message send/receive** - Bidirectional messaging load tests
-- [ ] **Connection lifecycle** - Open, message, close patterns
-- [ ] **WebSocket checks** - Validate message content
-- [ ] **WebSocket metrics** - Messages/sec, connection time, frame sizes
+- [x] **WebSocket connections** - `ws://` and `wss://` protocol support
+- [x] **Echo mode** - Send message, wait for response, measure RTT
+- [x] **Fire-and-forget mode** - Send-only for throughput testing
+- [x] **Connection-based load model** - N connections, each sends at interval
+- [x] **WebSocket metrics** - Messages/sec, connection time, latency percentiles
+- [x] CLI flags: `--ws-message-interval`, `--ws-fire-and-forget`
+- [x] TOML config: `[websocket]` section with `message_interval` and `mode`
 
-### v1.3 — Protocol Expansion
+### v1.1 — Protocol Expansion ✓
 
-- [ ] **HTTP/3 support** - QUIC-based protocol (experimental, feature-gated)
-- [ ] **gRPC unary calls** - Request/response pattern
-- [ ] **Protobuf support** - Load .proto files or reflection
-- [ ] **gRPC streaming** - Client, server, and bidirectional streams
-- [ ] **gRPC checks** - Status codes, response validation
+- [x] **HTTP/3 support** - QUIC-based protocol (experimental, feature-gated)
+  - Enable with `--features http3`
+  - Uses quinn + h3 for QUIC transport
+- [x] **gRPC unary calls** - Request/response pattern
+  - Enable with `--features grpc`
+  - Uses tonic for gRPC client
+- [x] **gRPC server streaming** - Receive multiple responses
+- [x] **CI/CD templates** - GitHub Actions, GitLab CI, Jenkins
+- [x] **HAR import** - Convert browser recordings to load tests
+- [x] **GitHub release workflow** - Cross-compiled binaries
 
 ### v1.4 — Observability & Integration
 

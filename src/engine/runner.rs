@@ -4,8 +4,16 @@ use crate::engine::arrival_rate::{ArrivalRateExecutor, RampingArrivalRateExecuto
 use crate::engine::scheduler::{RampUpScheduler, RateLimiter, StageInfo, StagesScheduler};
 use crate::engine::thresholds::evaluate_thresholds;
 use crate::engine::worker::{CheckResult, Worker};
+use crate::engine::ws_aggregator::WsAggregator;
+use crate::engine::ws_worker::WsWorker;
+#[cfg(feature = "grpc")]
+use crate::grpc::{GrpcConfig, GrpcError, execute_grpc_request};
 use crate::http::create_client;
-use crate::types::{LoadConfig, RequestResult, RunPhase, RunState, StatsSnapshot, Threshold};
+#[cfg(feature = "http3")]
+use crate::http3::{Http3Client, execute_http3_request};
+use crate::types::{
+    LoadConfig, RequestResult, RunPhase, RunState, StatsSnapshot, Threshold, WsMessageResult,
+};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
@@ -55,10 +63,27 @@ impl Engine {
         }
     }
 
+    /// Check if this is a WebSocket URL
+    fn is_websocket(&self) -> bool {
+        self.config.url.starts_with("ws://") || self.config.url.starts_with("wss://")
+    }
+
     /// Check if arrival rate mode is enabled
     fn is_arrival_rate_mode(&self) -> bool {
         self.config.arrival_rate.is_some()
             || self.config.stages.iter().any(|s| s.target_rate.is_some())
+    }
+
+    /// Check if HTTP/3 mode is enabled
+    #[cfg(feature = "http3")]
+    fn is_http3(&self) -> bool {
+        self.config.http3
+    }
+
+    /// Check if gRPC mode is enabled
+    #[cfg(feature = "grpc")]
+    fn is_grpc(&self) -> bool {
+        self.config.grpc_service.is_some() && self.config.grpc_method.is_some()
     }
 
     #[allow(dead_code)]
@@ -116,6 +141,23 @@ impl Engine {
     }
 
     pub async fn run(self) -> Result<Stats, String> {
+        // Check if this is a WebSocket test
+        if self.is_websocket() {
+            return self.run_websocket_mode().await;
+        }
+
+        // Check if this is a gRPC test
+        #[cfg(feature = "grpc")]
+        if self.is_grpc() {
+            return self.run_grpc_mode().await;
+        }
+
+        // Check if this is an HTTP/3 test
+        #[cfg(feature = "http3")]
+        if self.is_http3() {
+            return self.run_http3_mode().await;
+        }
+
         // Check if we should use arrival rate mode
         if self.is_arrival_rate_mode() {
             return self.run_arrival_rate_mode().await;
@@ -566,6 +608,351 @@ impl Engine {
         let _ = self.state_tx.send(final_state);
 
         Ok(stats)
+    }
+
+    /// Run HTTP/3 load test mode
+    #[cfg(feature = "http3")]
+    async fn run_http3_mode(self) -> Result<Stats, String> {
+        use reqwest::Url;
+        use std::net::ToSocketAddrs;
+
+        let total_duration = self.config.warmup + self.config.duration;
+        let concurrency = self.config.concurrency;
+
+        // Parse URL for host, port, and path (including query string)
+        let url = Url::parse(&self.config.url).map_err(|e| format!("Invalid URL: {}", e))?;
+        let host = url.host_str().ok_or("Missing host in URL")?;
+        let port = url.port().unwrap_or(443);
+        let path = if let Some(query) = url.query() {
+            format!("{}?{}", url.path(), query)
+        } else if url.path().is_empty() {
+            "/".to_string()
+        } else {
+            url.path().to_string()
+        };
+
+        // Resolve address
+        let addr_str = format!("{}:{}", host, port);
+        let addr = addr_str
+            .to_socket_addrs()
+            .map_err(|e| format!("Failed to resolve {}: {}", addr_str, e))?
+            .next()
+            .ok_or_else(|| format!("No addresses found for {}", addr_str))?;
+
+        // Create HTTP/3 client
+        let client = Http3Client::new(self.config.insecure)
+            .map_err(|e| format!("Failed to create HTTP/3 client: {}", e))?;
+        let client = Arc::new(client);
+
+        let (result_tx, result_rx) = mpsc::channel::<RequestResult>(RESULT_CHANNEL_SIZE);
+
+        let _ = self.state_tx.send(RunState::Running);
+
+        // Create aggregator
+        let aggregator = Aggregator::new(
+            total_duration,
+            result_rx,
+            self.snapshot_tx.clone(),
+            self.config.warmup,
+            self.phase_tx.clone(),
+            self.config.max_requests,
+            self.cancel_token.clone(),
+        );
+        let aggregator_handle = tokio::spawn(aggregator.run());
+
+        // Spawn workers
+        let mut worker_handles = Vec::with_capacity(concurrency as usize);
+        let method = self.config.method.to_string();
+        let headers: Vec<(String, String)> = self.config.headers.clone();
+        let body = self.config.body.clone();
+        let timeout = self.config.timeout;
+        let server_name = host.to_string();
+
+        for _id in 0..concurrency {
+            let client = client.clone();
+            let result_tx = result_tx.clone();
+            let cancel_token = self.cancel_token.clone();
+            let method = method.clone();
+            let path = path.clone();
+            let headers = headers.clone();
+            let body = body.clone();
+            let server_name = server_name.clone();
+
+            let handle = tokio::spawn(async move {
+                loop {
+                    if cancel_token.is_cancelled() {
+                        break;
+                    }
+
+                    let result = execute_http3_request(
+                        &client,
+                        addr,
+                        &server_name,
+                        &method,
+                        &path,
+                        &headers,
+                        body.as_deref(),
+                        timeout,
+                    )
+                    .await;
+
+                    if result_tx.send(result).await.is_err() {
+                        break;
+                    }
+                }
+            });
+            worker_handles.push(handle);
+        }
+
+        drop(result_tx);
+
+        let cancel_token = self.cancel_token.clone();
+
+        // Wait for duration or cancellation
+        tokio::select! {
+            _ = sleep(total_duration) => {
+                tracing::info!("Duration elapsed, stopping HTTP/3 workers");
+                cancel_token.cancel();
+            }
+            _ = cancel_token.cancelled() => {
+                tracing::info!("Cancellation requested");
+            }
+        }
+
+        // Wait for workers to finish
+        for handle in worker_handles {
+            let _ = tokio::time::timeout(Duration::from_secs(1), handle).await;
+        }
+
+        let stats = aggregator_handle
+            .await
+            .map_err(|e| format!("Aggregator task failed: {}", e))?;
+
+        let final_state = if self.cancel_token.is_cancelled() {
+            RunState::Cancelled
+        } else {
+            RunState::Completed
+        };
+        let _ = self.state_tx.send(final_state);
+
+        Ok(stats)
+    }
+
+    /// Run gRPC load test mode
+    #[cfg(feature = "grpc")]
+    async fn run_grpc_mode(self) -> Result<Stats, String> {
+        use crate::types::ErrorKind;
+        use reqwest::Url;
+
+        let total_duration = self.config.warmup + self.config.duration;
+        let concurrency = self.config.concurrency;
+
+        // Parse URL for address
+        let url = Url::parse(&self.config.url).map_err(|e| format!("Invalid URL: {}", e))?;
+        let host = url.host_str().ok_or("Missing host in URL")?;
+        let port = url
+            .port()
+            .unwrap_or(if url.scheme() == "https" { 443 } else { 80 });
+        let address = format!("{}:{}", host, port);
+        let tls = url.scheme() == "https";
+
+        let service = self
+            .config
+            .grpc_service
+            .clone()
+            .ok_or("gRPC service not specified")?;
+        let method = self
+            .config
+            .grpc_method
+            .clone()
+            .ok_or("gRPC method not specified")?;
+        let request_body = self.config.body.clone().unwrap_or_default();
+
+        let grpc_config = GrpcConfig {
+            address,
+            service,
+            method,
+            request: request_body,
+            timeout: self.config.timeout,
+            tls,
+            insecure: self.config.insecure,
+            metadata: self.config.headers.clone(),
+            ..Default::default()
+        };
+        let grpc_config = Arc::new(grpc_config);
+
+        let (result_tx, result_rx) = mpsc::channel::<RequestResult>(RESULT_CHANNEL_SIZE);
+
+        let _ = self.state_tx.send(RunState::Running);
+
+        // Create aggregator
+        let aggregator = Aggregator::new(
+            total_duration,
+            result_rx,
+            self.snapshot_tx.clone(),
+            self.config.warmup,
+            self.phase_tx.clone(),
+            self.config.max_requests,
+            self.cancel_token.clone(),
+        );
+        let aggregator_handle = tokio::spawn(aggregator.run());
+
+        // Spawn workers
+        let mut worker_handles = Vec::with_capacity(concurrency as usize);
+
+        for _id in 0..concurrency {
+            let grpc_config = grpc_config.clone();
+            let result_tx = result_tx.clone();
+            let cancel_token = self.cancel_token.clone();
+
+            let handle = tokio::spawn(async move {
+                loop {
+                    if cancel_token.is_cancelled() {
+                        break;
+                    }
+
+                    let grpc_result = execute_grpc_request(&grpc_config).await;
+
+                    // Convert gRPC result to HTTP-like RequestResult for aggregation
+                    let result = RequestResult {
+                        status: if grpc_result.error.is_some() {
+                            None // Error case - no valid HTTP status
+                        } else if grpc_result.status_code == 0 {
+                            Some(200) // gRPC OK -> HTTP 200
+                        } else {
+                            // gRPC status codes are 0-16, clamp and map to 5xx range
+                            Some(500 + grpc_result.status_code.clamp(0, 16) as u16)
+                        },
+                        latency_us: grpc_result.latency_us,
+                        bytes_received: grpc_result.bytes_received,
+                        error: grpc_result.error.map(|e| match e {
+                            GrpcError::Connect(_) => ErrorKind::Connect,
+                            GrpcError::Timeout => ErrorKind::Timeout,
+                            _ => ErrorKind::Other,
+                        }),
+                        body: grpc_result.responses.first().cloned(),
+                        scheduled_at_us: None,
+                        started_at_us: None,
+                        queue_time_us: None,
+                    };
+
+                    if result_tx.send(result).await.is_err() {
+                        break;
+                    }
+                }
+            });
+            worker_handles.push(handle);
+        }
+
+        drop(result_tx);
+
+        let cancel_token = self.cancel_token.clone();
+
+        // Wait for duration or cancellation
+        tokio::select! {
+            _ = sleep(total_duration) => {
+                tracing::info!("Duration elapsed, stopping gRPC workers");
+                cancel_token.cancel();
+            }
+            _ = cancel_token.cancelled() => {
+                tracing::info!("Cancellation requested");
+            }
+        }
+
+        // Wait for workers to finish
+        for handle in worker_handles {
+            let _ = tokio::time::timeout(Duration::from_secs(1), handle).await;
+        }
+
+        let stats = aggregator_handle
+            .await
+            .map_err(|e| format!("Aggregator task failed: {}", e))?;
+
+        let final_state = if self.cancel_token.is_cancelled() {
+            RunState::Cancelled
+        } else {
+            RunState::Completed
+        };
+        let _ = self.state_tx.send(final_state);
+
+        Ok(stats)
+    }
+
+    async fn run_websocket_mode(self) -> Result<Stats, String> {
+        let total_duration = self.config.warmup + self.config.duration;
+        let connection_count = self.config.concurrency;
+        let message = self
+            .config
+            .body
+            .clone()
+            .unwrap_or_else(|| "ping".to_string());
+
+        let (result_tx, result_rx) = mpsc::channel::<WsMessageResult>(RESULT_CHANNEL_SIZE);
+
+        let _ = self.state_tx.send(RunState::Running);
+
+        // Create WebSocket aggregator
+        let aggregator = WsAggregator::new(
+            total_duration,
+            result_rx,
+            self.snapshot_tx.clone(),
+            self.config.warmup,
+            self.phase_tx.clone(),
+            self.cancel_token.clone(),
+            connection_count,
+        );
+        let aggregator_handle = tokio::spawn(aggregator.run());
+
+        // Spawn WebSocket workers
+        let mut worker_handles = Vec::with_capacity(connection_count as usize);
+        for id in 0..connection_count {
+            let worker = WsWorker::new(
+                id,
+                self.config.url.clone(),
+                message.clone(),
+                self.config.ws_mode,
+                self.config.ws_message_interval,
+                self.config.timeout,
+                result_tx.clone(),
+                self.cancel_token.clone(),
+            );
+            worker_handles.push(tokio::spawn(worker.run()));
+        }
+
+        drop(result_tx);
+
+        let cancel_token = self.cancel_token.clone();
+
+        // Wait for total duration
+        tokio::select! {
+            _ = sleep(total_duration) => {
+                tracing::info!("Duration elapsed, stopping WebSocket workers");
+                cancel_token.cancel();
+            }
+            _ = cancel_token.cancelled() => {
+                tracing::info!("Cancellation requested");
+            }
+        }
+
+        // Wait for workers to finish (with timeout)
+        for handle in worker_handles {
+            let _ = tokio::time::timeout(Duration::from_secs(1), handle).await;
+        }
+
+        // Wait for aggregator to finish
+        let _ws_stats = aggregator_handle
+            .await
+            .map_err(|e| format!("Aggregator task failed: {}", e))?;
+
+        let final_state = if self.cancel_token.is_cancelled() {
+            RunState::Cancelled
+        } else {
+            RunState::Completed
+        };
+        let _ = self.state_tx.send(final_state);
+
+        // Return empty HTTP Stats (WS stats are in snapshot)
+        Ok(Stats::new(total_duration))
     }
 }
 

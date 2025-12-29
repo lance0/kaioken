@@ -273,3 +273,66 @@ mod man_page {
             .stdout(predicate::str::contains(".TH"));
     }
 }
+
+mod websocket_cli {
+    use super::*;
+
+    #[test]
+    fn ws_message_interval_flag_accepted() {
+        kaioken()
+            .args([
+                "run",
+                "ws://localhost:8080/ws",
+                "--ws-message-interval",
+                "50ms",
+                "--dry-run",
+                "-y",
+            ])
+            .assert()
+            .success();
+    }
+
+    #[test]
+    fn ws_fire_and_forget_flag_accepted() {
+        kaioken()
+            .args([
+                "run",
+                "ws://localhost:8080/ws",
+                "--ws-fire-and-forget",
+                "--dry-run",
+                "-y",
+            ])
+            .assert()
+            .success();
+    }
+
+    #[test]
+    fn ws_combined_flags_accepted() {
+        kaioken()
+            .args([
+                "run",
+                "ws://localhost:8080/events",
+                "--ws-message-interval",
+                "10ms",
+                "--ws-fire-and-forget",
+                "-c",
+                "20",
+                "-d",
+                "30s",
+                "--dry-run",
+                "-y",
+            ])
+            .assert()
+            .success();
+    }
+
+    #[test]
+    fn help_shows_websocket_options() {
+        kaioken()
+            .args(["run", "--help"])
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("--ws-message-interval"))
+            .stdout(predicate::str::contains("--ws-fire-and-forget"));
+    }
+}

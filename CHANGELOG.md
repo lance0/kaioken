@@ -5,10 +5,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.1.0] - 2025-12-29
 
 ### Added
 
+- **CI/CD templates** - Ready-to-use pipeline templates for popular CI systems:
+  - GitHub Actions (`examples/ci/github-actions.yml`)
+  - GitLab CI (`examples/ci/gitlab-ci.yml`)
+  - Jenkins (`examples/ci/Jenkinsfile`)
+  - Includes threshold checking, baseline comparison, and artifact management
+- **HAR import** - Convert browser network recordings to kaioken configs:
+  ```bash
+  # Import from Chrome DevTools HAR export
+  kaioken import recording.har -o load-test.toml
+
+  # Filter by URL pattern
+  kaioken import api.har --filter "api/v2" -o filtered.toml
+  ```
+  - Auto-detects format from file extension
+  - Preserves headers, body, and method from HAR entries
+  - Multi-request HARs become weighted scenarios
+- **HTTP/3 support (experimental)** - QUIC-based HTTP/3 client:
+  - Enable with `--features http3` at build time
+  - `--http3` flag for HTTP/3 requests
+  - Uses quinn + h3 for QUIC transport
+  - 0-RTT connection establishment, no head-of-line blocking
+- **gRPC support (experimental)** - Load test gRPC services:
+  - Enable with `--features grpc` at build time
+  - Unary calls and server streaming support
+  - Raw bytes codec for dynamic protobuf handling
+  - Uses tonic for gRPC client implementation
+  - CLI flags: `--grpc-service`, `--grpc-method`
 - **Latency correction** - Avoid coordinated omission problem for accurate open-loop testing:
   - Tracks queue wait time separately from actual server response time
   - Auto-enabled for arrival rate mode (`--arrival-rate`)
@@ -24,6 +51,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - "dns: check the hostname"
   - "timeout: try increasing --timeout"
   - "tls: try --insecure to skip verification"
+- **WebSocket support** - Load test WebSocket endpoints:
+  - Support for `ws://` and `wss://` URLs
+  - Echo mode (measure RTT) and fire-and-forget mode (measure throughput)
+  - Connection-based load model: N concurrent connections, each sends at interval
+  - Metrics: message latency, connect time, messages/sec, connections, errors
+  - CLI flags: `--ws-message-interval`, `--ws-fire-and-forget`
+  - TOML config:
+    ```toml
+    [websocket]
+    message_interval = "100ms"
+    mode = "echo"  # or "fire_and_forget"
+    ```
+  - Usage examples:
+    ```bash
+    # Echo mode (default) - measure RTT
+    kaioken run ws://localhost:8080/ws -c 100 -d 30s -b '{"type":"ping"}'
+
+    # Fire-and-forget - measure throughput
+    kaioken run ws://localhost:8080/events -c 50 --ws-fire-and-forget
+    ```
 
 ## [1.0.0] - 2025-12-24
 
