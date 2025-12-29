@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Disable with `--no-latency-correction` if needed
   - TUI shows `[corrected]` indicator when active
   - JSON output includes `corrected_latency_us` and `queue_time_us` sections
+- **Redirect control** - Option to disable following HTTP redirects:
+  - `--no-follow-redirects` CLI flag
+  - `follow_redirects = false` in TOML config
+  - Useful for testing redirect endpoints directly
 
 ## [1.0.0] - 2025-12-24
 

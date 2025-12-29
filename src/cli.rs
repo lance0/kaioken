@@ -124,6 +124,10 @@ pub struct RunArgs {
     #[arg(long)]
     pub no_latency_correction: bool,
 
+    /// Disable following HTTP redirects
+    #[arg(long)]
+    pub no_follow_redirects: bool,
+
     /// Config file path (TOML)
     #[arg(short = 'f', long = "config")]
     pub config: Option<PathBuf>,

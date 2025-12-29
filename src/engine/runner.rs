@@ -135,6 +135,7 @@ impl Engine {
             self.config.insecure,
             self.config.http2,
             self.config.cookie_jar,
+            self.config.follow_redirects,
         )
         .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
 
@@ -398,6 +399,7 @@ impl Engine {
             self.config.insecure,
             self.config.http2,
             self.config.cookie_jar,
+            self.config.follow_redirects,
         )
         .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
 

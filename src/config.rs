@@ -86,6 +86,10 @@ fn default_weight() -> u32 {
     1
 }
 
+fn default_true() -> bool {
+    true
+}
+
 #[derive(Debug, Deserialize, Default)]
 pub struct TargetConfig {
     pub url: Option<String>,
@@ -104,6 +108,8 @@ pub struct TargetConfig {
     pub http2: bool,
     #[serde(default)]
     pub cookie_jar: bool,
+    #[serde(default = "default_true")]
+    pub follow_redirects: bool,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -284,6 +290,7 @@ pub fn merge_config(args: &RunArgs, toml: Option<TomlConfig>) -> Result<LoadConf
     let insecure = args.insecure || toml.target.insecure;
     let http2 = args.http2 || toml.target.http2;
     let cookie_jar = args.cookie_jar || toml.target.cookie_jar;
+    let follow_redirects = !args.no_follow_redirects && toml.target.follow_redirects;
 
     // Process scenarios
     let scenarios = process_scenarios(&toml.scenarios)?;
@@ -340,6 +347,7 @@ pub fn merge_config(args: &RunArgs, toml: Option<TomlConfig>) -> Result<LoadConf
         insecure,
         http2,
         cookie_jar,
+        follow_redirects,
         thresholds,
         checks,
         stages,

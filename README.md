@@ -105,6 +105,7 @@ kaioken run [OPTIONS] [URL]
 | `--arrival-rate` | 0 | Target RPS (enables arrival rate mode) |
 | `--max-vus` | 100 | Max VUs for arrival rate mode |
 | `--no-latency-correction` | false | Disable latency correction |
+| `--no-follow-redirects` | false | Don't follow HTTP redirects |
 | `-m, --method` | GET | HTTP method |
 | `-H, --header` | — | Header (repeatable) |
 | `-b, --body` | — | Request body |
@@ -183,6 +184,7 @@ connect_timeout = "2s"
 # http2 = false
 # insecure = false
 # cookie_jar = false  # Enable for session handling
+# follow_redirects = true  # Set false to not follow redirects
 
 [target.headers]
 Authorization = "Bearer ${API_TOKEN}"

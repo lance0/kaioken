@@ -143,7 +143,7 @@ Fast local load testing against HTTP endpoints with zero setup friction, real-ti
   - Auto-enabled for arrival rate mode, disable with `--no-latency-correction`
   - Tracks queue wait time separately from actual server response time
   - TUI shows `[corrected]` indicator when active
-- [ ] **Redirect control** - `follow_redirects = false` option
+- [x] **Redirect control** - `follow_redirects = false` option
 - [ ] **Improved error messages** - Suggestions for common mistakes
 - [ ] **Package distribution**:
   - [x] Publish to crates.io (`cargo install kaioken`)

@@ -1,4 +1,5 @@
 use reqwest::Client;
+use reqwest::redirect::Policy;
 use std::time::Duration;
 
 pub fn create_client(
@@ -8,6 +9,7 @@ pub fn create_client(
     insecure: bool,
     http2: bool,
     cookie_jar: bool,
+    follow_redirects: bool,
 ) -> Result<Client, reqwest::Error> {
     let mut builder = Client::builder()
         .pool_max_idle_per_host(concurrency as usize)
@@ -27,6 +29,10 @@ pub fn create_client(
 
     if http2 {
         builder = builder.http2_prior_knowledge();
+    }
+
+    if !follow_redirects {
+        builder = builder.redirect(Policy::none());
     }
 
     builder.build()
