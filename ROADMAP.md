@@ -144,7 +144,7 @@ Fast local load testing against HTTP endpoints with zero setup friction, real-ti
   - Tracks queue wait time separately from actual server response time
   - TUI shows `[corrected]` indicator when active
 - [x] **Redirect control** - `follow_redirects = false` option
-- [ ] **Improved error messages** - Suggestions for common mistakes
+- [x] **Improved error messages** - Suggestions for common mistakes
 - [ ] **Package distribution**:
   - [x] Publish to crates.io (`cargo install kaioken`)
   - [ ] Homebrew formula

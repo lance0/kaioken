@@ -201,6 +201,20 @@ impl ErrorKind {
             ErrorKind::Other => "other",
         }
     }
+
+    pub fn suggestion(&self) -> &'static str {
+        match self {
+            ErrorKind::Timeout => "try increasing --timeout",
+            ErrorKind::Dns => "check the hostname",
+            ErrorKind::Connect => "check network and firewall",
+            ErrorKind::Tls => "try --insecure to skip verification",
+            ErrorKind::Refused => "is the server running?",
+            ErrorKind::Reset => "server closed the connection",
+            ErrorKind::Http => "check request parameters",
+            ErrorKind::Body => "response body error",
+            ErrorKind::Other => "",
+        }
+    }
 }
 
 #[derive(Debug, Clone)]

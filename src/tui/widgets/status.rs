@@ -92,10 +92,15 @@ impl<'a> StatusWidget<'a> {
             .iter()
             .filter_map(|kind| {
                 self.snapshot.errors.get(kind).map(|count| {
-                    Line::from(vec![
+                    let suggestion = kind.suggestion();
+                    let mut spans = vec![
                         Span::styled(format!("{:<10} ", kind.as_str()), self.theme.error),
-                        Span::styled(format!("{}", count), self.theme.normal),
-                    ])
+                        Span::styled(format!("{:<6}", count), self.theme.normal),
+                    ];
+                    if !suggestion.is_empty() {
+                        spans.push(Span::styled(format!(" {}", suggestion), self.theme.muted));
+                    }
+                    Line::from(spans)
                 })
             })
             .take(5)

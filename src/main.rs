@@ -517,7 +517,17 @@ fn print_summary(snapshot: &types::StatsSnapshot, serious: bool) {
     if !snapshot.errors.is_empty() {
         println!("\nErrors:");
         for (kind, count) in &snapshot.errors {
-            println!("  {:15} {:>12}", format!("{}:", kind.as_str()), count);
+            let suggestion = kind.suggestion();
+            if suggestion.is_empty() {
+                println!("  {:15} {:>12}", format!("{}:", kind.as_str()), count);
+            } else {
+                println!(
+                    "  {:15} {:>12}  ({})",
+                    format!("{}:", kind.as_str()),
+                    count,
+                    suggestion
+                );
+            }
         }
     }
 

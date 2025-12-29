@@ -19,6 +19,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `--no-follow-redirects` CLI flag
   - `follow_redirects = false` in TOML config
   - Useful for testing redirect endpoints directly
+- **Improved error messages** - Actionable suggestions for common errors:
+  - "refused: is the server running?"
+  - "dns: check the hostname"
+  - "timeout: try increasing --timeout"
+  - "tls: try --insecure to skip verification"
 
 ## [1.0.0] - 2025-12-24
 
