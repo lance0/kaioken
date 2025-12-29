@@ -564,6 +564,8 @@ pub struct LoadConfig {
     pub grpc_service: Option<String>,
     #[cfg(feature = "grpc")]
     pub grpc_method: Option<String>,
+    #[cfg(feature = "grpc")]
+    pub body_bytes: Option<Vec<u8>>,
     pub cookie_jar: bool,
     pub follow_redirects: bool,
     pub thresholds: Vec<Threshold>,
@@ -603,6 +605,8 @@ impl Default for LoadConfig {
             grpc_service: None,
             #[cfg(feature = "grpc")]
             grpc_method: None,
+            #[cfg(feature = "grpc")]
+            body_bytes: None,
             cookie_jar: false,
             follow_redirects: true,
             thresholds: Vec::new(),

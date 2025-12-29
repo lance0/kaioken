@@ -168,9 +168,7 @@ async fn execute_unary(
 
     let mut client = Grpc::new(channel);
 
-    // Convert JSON request to bytes
-    // For a full implementation, this would use prost-reflect or similar
-    // For now, we send raw bytes (proto-encoded data must be provided)
+    // Send raw bytes (binary protobuf or text data)
     let request_bytes = Bytes::from(config.request.clone());
 
     // Build the request with metadata

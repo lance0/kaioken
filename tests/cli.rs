@@ -336,3 +336,117 @@ mod websocket_cli {
             .stdout(predicate::str::contains("--ws-fire-and-forget"));
     }
 }
+
+mod import_command {
+    use super::*;
+    use std::fs;
+    use tempfile::tempdir;
+
+    #[test]
+    fn import_help_shows_options() {
+        kaioken()
+            .args(["import", "--help"])
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("HAR"))
+            .stdout(predicate::str::contains("--filter"));
+    }
+
+    #[test]
+    fn import_har_creates_config() {
+        let dir = tempdir().unwrap();
+        let har_file = dir.path().join("test.har");
+        let output_file = dir.path().join("output.toml");
+
+        fs::write(
+            &har_file,
+            r#"{
+                "log": {
+                    "entries": [{
+                        "request": {
+                            "method": "GET",
+                            "url": "https://api.example.com/health",
+                            "headers": []
+                        }
+                    }]
+                }
+            }"#,
+        )
+        .unwrap();
+
+        kaioken()
+            .args([
+                "import",
+                har_file.to_str().unwrap(),
+                "-o",
+                output_file.to_str().unwrap(),
+            ])
+            .assert()
+            .success();
+
+        let content = fs::read_to_string(&output_file).unwrap();
+        assert!(content.contains("[target]"));
+        assert!(content.contains("https://api.example.com/health"));
+    }
+
+    #[test]
+    fn import_missing_file_fails() {
+        kaioken()
+            .args(["import", "/nonexistent/file.har"])
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("Failed to read"));
+    }
+
+    #[test]
+    fn import_invalid_json_fails() {
+        let dir = tempdir().unwrap();
+        let har_file = dir.path().join("invalid.har");
+
+        fs::write(&har_file, "{ invalid json }").unwrap();
+
+        kaioken()
+            .args(["import", har_file.to_str().unwrap()])
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("Failed to parse"));
+    }
+
+    #[test]
+    fn import_with_filter() {
+        let dir = tempdir().unwrap();
+        let har_file = dir.path().join("multi.har");
+        let output_file = dir.path().join("filtered.toml");
+
+        fs::write(
+            &har_file,
+            r#"{
+                "log": {
+                    "entries": [
+                        {"request": {"method": "GET", "url": "https://api.example.com/v1/users", "headers": []}},
+                        {"request": {"method": "GET", "url": "https://api.example.com/v2/users", "headers": []}},
+                        {"request": {"method": "GET", "url": "https://cdn.example.com/image.png", "headers": []}}
+                    ]
+                }
+            }"#,
+        )
+        .unwrap();
+
+        kaioken()
+            .args([
+                "import",
+                har_file.to_str().unwrap(),
+                "--filter",
+                "v2",
+                "-o",
+                output_file.to_str().unwrap(),
+            ])
+            .assert()
+            .success();
+
+        let content = fs::read_to_string(&output_file).unwrap();
+        assert!(content.contains("/v2/users"));
+        assert!(!content.contains("/v1/users"));
+        assert!(!content.contains("cdn.example.com"));
+    }
+}

@@ -562,15 +562,22 @@ Build with gRPC support to load test gRPC services:
 ```bash
 cargo install kaioken --features grpc
 
-# Unary call
+# Unary call with inline body
 kaioken run https://localhost:50051 \
   --grpc-service "helloworld.Greeter" \
   --grpc-method "SayHello" \
   -b 'raw protobuf bytes here' \
   -c 50 -d 30s
+
+# Or load binary protobuf from file
+kaioken run https://localhost:50051 \
+  --grpc-service "helloworld.Greeter" \
+  --grpc-method "SayHello" \
+  --body-file request.bin \
+  -c 50 -d 30s
 ```
 
-Supports unary calls and server streaming. The request body should be **raw protobuf-encoded bytes**. For simple testing with text-based services, you can pass plain text. JSON-to-protobuf conversion is not currently supported.
+Supports unary calls and server streaming. The request body should be **raw protobuf-encoded bytes**. Use `--body-file` to load binary protobuf data from a file. JSON-to-protobuf conversion is not currently supported.
 
 **Limitations:** gRPC mode uses simple constant-VU execution. Options like
 `--arrival-rate`, `--rate`, `--think-time`, `--ramp-up`, and `[[scenarios]]` are ignored.

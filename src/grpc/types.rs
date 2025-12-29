@@ -16,7 +16,7 @@ pub struct GrpcConfig {
     pub method: String,
 
     /// Request body (raw bytes or protobuf-encoded data)
-    pub request: String,
+    pub request: Vec<u8>,
 
     /// Request timeout
     #[serde(default = "default_timeout")]
@@ -132,7 +132,7 @@ impl Default for GrpcConfig {
             address: "localhost:50051".to_string(),
             service: String::new(),
             method: String::new(),
-            request: "{}".to_string(),
+            request: Vec::new(),
             timeout: default_timeout(),
             tls: false,
             insecure: false,

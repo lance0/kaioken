@@ -174,8 +174,7 @@ Fast local load testing against HTTP endpoints with zero setup friction, real-ti
 - [ ] **Prometheus metrics endpoint** - Expose `/metrics` while test runs
 - [ ] **InfluxDB export** - Time-series metrics output
 - [ ] **OpenTelemetry traces** - Distributed tracing support
-- [ ] **CI/CD templates** - GitHub Actions, GitLab CI, Jenkins examples
-- [ ] **Import converters** - HAR files, Postman collections, OpenAPI specs
+- [ ] **Import converters** - Postman collections, OpenAPI specs
 
 ### v1.5 — Production Polish
 

@@ -232,8 +232,22 @@ pub fn merge_config(args: &RunArgs, toml: Option<TomlConfig>) -> Result<LoadConf
         }
     }
 
+    // Check if gRPC mode is active (needed to decide how to load body)
+    #[cfg(feature = "grpc")]
+    let is_grpc_mode = args
+        .grpc_service
+        .as_ref()
+        .map(|s| !s.is_empty())
+        .unwrap_or(false);
+    #[cfg(not(feature = "grpc"))]
+    let is_grpc_mode = false;
+
     // Load body from file if specified
-    let body = if let Some(ref path) = args.body_file {
+    // Skip read_to_string for gRPC mode with body_file (binary files handled by body_bytes)
+    let body = if is_grpc_mode && (args.body_file.is_some() || toml.target.body_file.is_some()) {
+        // gRPC mode with body file - skip string loading, body_bytes will handle binary
+        args.body.clone().or_else(|| toml.target.body.clone())
+    } else if let Some(ref path) = args.body_file {
         Some(
             fs::read_to_string(path)
                 .map_err(|e| format!("Failed to read body file '{}': {}", path.display(), e))?,
@@ -246,7 +260,7 @@ pub fn merge_config(args: &RunArgs, toml: Option<TomlConfig>) -> Result<LoadConf
                 .map_err(|e| format!("Failed to read body file '{}': {}", path, e))?,
         )
     } else {
-        toml.target.body
+        toml.target.body.clone()
     };
 
     let concurrency = if args.concurrency != 50 {
@@ -323,10 +337,7 @@ pub fn merge_config(args: &RunArgs, toml: Option<TomlConfig>) -> Result<LoadConf
             .as_ref()
             .map(|s| !s.is_empty())
             .unwrap_or(false);
-        let has_method = grpc_method
-            .as_ref()
-            .map(|s| !s.is_empty())
-            .unwrap_or(false);
+        let has_method = grpc_method.as_ref().map(|s| !s.is_empty()).unwrap_or(false);
 
         if has_service != has_method {
             return Err(
@@ -356,11 +367,39 @@ pub fn merge_config(args: &RunArgs, toml: Option<TomlConfig>) -> Result<LoadConf
             .map(|s| !s.is_empty())
             .unwrap_or(false);
         if http3 && has_grpc {
-            return Err(
-                "Cannot use --http3 with --grpc-service. Choose one protocol.".to_string(),
-            );
+            return Err("Cannot use --http3 with --grpc-service. Choose one protocol.".to_string());
         }
     }
+
+    // Load body as binary bytes for gRPC mode (supports binary protobuf)
+    #[cfg(feature = "grpc")]
+    let body_bytes: Option<Vec<u8>> =
+        {
+            let has_grpc = grpc_service
+                .as_ref()
+                .map(|s| !s.is_empty())
+                .unwrap_or(false);
+            if has_grpc {
+                if let Some(ref path) = args.body_file {
+                    Some(fs::read(path).map_err(|e| {
+                        format!("Failed to read body file '{}': {}", path.display(), e)
+                    })?)
+                } else if let Some(ref body) = args.body {
+                    Some(body.as_bytes().to_vec())
+                } else if let Some(ref path) = toml.target.body_file {
+                    Some(
+                        fs::read(path)
+                            .map_err(|e| format!("Failed to read body file '{}': {}", path, e))?,
+                    )
+                } else if let Some(ref body) = toml.target.body {
+                    Some(body.as_bytes().to_vec())
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        };
 
     // Process scenarios
     let scenarios = process_scenarios(&toml.scenarios)?;
@@ -440,6 +479,8 @@ pub fn merge_config(args: &RunArgs, toml: Option<TomlConfig>) -> Result<LoadConf
         grpc_service,
         #[cfg(feature = "grpc")]
         grpc_method,
+        #[cfg(feature = "grpc")]
+        body_bytes,
         cookie_jar,
         follow_redirects,
         thresholds,

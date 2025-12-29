@@ -690,3 +690,186 @@ mode = "fire_and_forget"
             .success();
     }
 }
+
+#[cfg(feature = "grpc")]
+mod grpc_config {
+    use super::*;
+
+    #[test]
+    fn grpc_service_requires_method() {
+        kaioken()
+            .args([
+                "run",
+                "https://localhost:50051",
+                "--grpc-service",
+                "hello.Greeter",
+                "--dry-run",
+                "-y",
+            ])
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "Both --grpc-service and --grpc-method must be provided together",
+            ));
+    }
+
+    #[test]
+    fn grpc_method_requires_service() {
+        kaioken()
+            .args([
+                "run",
+                "https://localhost:50051",
+                "--grpc-method",
+                "SayHello",
+                "--dry-run",
+                "-y",
+            ])
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "Both --grpc-service and --grpc-method must be provided together",
+            ));
+    }
+
+    #[test]
+    fn grpc_empty_service_rejected() {
+        // Empty string is treated as "not provided", so triggers the pairing check
+        kaioken()
+            .args([
+                "run",
+                "https://localhost:50051",
+                "--grpc-service",
+                "",
+                "--grpc-method",
+                "SayHello",
+                "--dry-run",
+                "-y",
+            ])
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("must be provided together"));
+    }
+
+    #[test]
+    fn grpc_insecure_rejected() {
+        kaioken()
+            .args([
+                "run",
+                "https://localhost:50051",
+                "--grpc-service",
+                "hello.Greeter",
+                "--grpc-method",
+                "SayHello",
+                "--insecure",
+                "--dry-run",
+                "-y",
+            ])
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "--insecure is not supported for gRPC",
+            ));
+    }
+
+    #[test]
+    fn grpc_valid_config_passes() {
+        kaioken()
+            .args([
+                "run",
+                "https://localhost:50051",
+                "--grpc-service",
+                "hello.Greeter",
+                "--grpc-method",
+                "SayHello",
+                "--dry-run",
+                "-y",
+            ])
+            .assert()
+            .success()
+            .stderr(predicate::str::contains("Configuration validated"));
+    }
+
+    #[test]
+    fn grpc_binary_body_file_works() {
+        let dir = tempdir().unwrap();
+        let body_file = dir.path().join("request.bin");
+
+        // Write binary protobuf-like data (non-UTF8)
+        // This is a simple protobuf: field 1, varint, value 150
+        // In real use this would be actual protobuf bytes
+        let binary_data: Vec<u8> = vec![0x08, 0x96, 0x01, 0xFF, 0xFE, 0x00, 0x80];
+        fs::write(&body_file, &binary_data).unwrap();
+
+        kaioken()
+            .args([
+                "run",
+                "https://localhost:50051",
+                "--grpc-service",
+                "hello.Greeter",
+                "--grpc-method",
+                "SayHello",
+                "--body-file",
+                body_file.to_str().unwrap(),
+                "--dry-run",
+                "-y",
+            ])
+            .assert()
+            .success()
+            .stderr(predicate::str::contains("Configuration validated"));
+    }
+}
+
+#[cfg(feature = "http3")]
+mod http3_config {
+    use super::*;
+
+    #[test]
+    fn http3_requires_https() {
+        kaioken()
+            .args(["run", "http://localhost:8080", "--http3", "--dry-run", "-y"])
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("HTTP/3 requires HTTPS"));
+    }
+
+    #[test]
+    fn http3_with_https_passes() {
+        kaioken()
+            .args([
+                "run",
+                "https://localhost:8080",
+                "--http3",
+                "--dry-run",
+                "-y",
+            ])
+            .assert()
+            .success()
+            .stderr(predicate::str::contains("Configuration validated"));
+    }
+}
+
+#[cfg(all(feature = "http3", feature = "grpc"))]
+mod protocol_conflict {
+    use super::*;
+
+    #[test]
+    fn http3_and_grpc_conflict() {
+        kaioken()
+            .args([
+                "run",
+                "https://localhost:8080",
+                "--http3",
+                "--grpc-service",
+                "hello.Greeter",
+                "--grpc-method",
+                "SayHello",
+                "--dry-run",
+                "-y",
+            ])
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "Cannot use --http3 with --grpc-service",
+            ));
+    }
+}

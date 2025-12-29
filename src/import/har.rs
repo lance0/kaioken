@@ -167,7 +167,7 @@ pub fn import_har(path: &Path, filter: Option<&Regex>) -> Result<String, String>
             if let Some(ref post_data) = entry.request.post_data {
                 if let Some(ref text) = post_data.text {
                     if !text.is_empty() {
-                        config.push_str(&format!("body = '''\n{}'''\n", text));
+                        config.push_str(&format_body(text));
                     }
                 }
             }
@@ -199,7 +199,7 @@ pub fn import_har(path: &Path, filter: Option<&Regex>) -> Result<String, String>
         if let Some(ref post_data) = entry.request.post_data {
             if let Some(ref text) = post_data.text {
                 if !text.is_empty() {
-                    config.push_str(&format!("body = '''\n{}'''\n", text));
+                    config.push_str(&format_body(text));
                 }
             }
         }
@@ -262,15 +262,28 @@ fn escape_toml(s: &str) -> String {
         .replace('\t', "\\t")
 }
 
-/// Quote header name for TOML key (keep original, quote to allow special chars)
+/// Quote header name for TOML key (escape special chars)
 fn format_header_key(name: &str) -> String {
-    // TOML keys with special characters need to be quoted
-    format!("\"{}\"", name)
+    // TOML keys with special characters need to be quoted and escaped
+    format!("\"{}\"", escape_toml(name))
+}
+
+/// Format body for TOML output, handling payloads that contain '''
+fn format_body(text: &str) -> String {
+    if text.contains("'''") {
+        // Fall back to basic string with escaping
+        format!("body = \"{}\"\n", escape_toml(text))
+    } else {
+        // Use literal string (preserves content as-is)
+        format!("body = '''\n{}'''\n", text)
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Write;
+    use tempfile::NamedTempFile;
 
     #[test]
     fn test_normalize_url() {
@@ -288,5 +301,216 @@ mod tests {
     fn test_escape_toml() {
         assert_eq!(escape_toml("hello\"world"), "hello\\\"world");
         assert_eq!(escape_toml("line1\nline2"), "line1\\nline2");
+    }
+
+    #[test]
+    fn test_filter_headers_removes_browser_headers() {
+        let headers = vec![
+            HarHeader {
+                name: "Accept".to_string(),
+                value: "application/json".to_string(),
+            },
+            HarHeader {
+                name: "User-Agent".to_string(),
+                value: "Mozilla/5.0".to_string(),
+            },
+            HarHeader {
+                name: "Cache-Control".to_string(),
+                value: "no-cache".to_string(),
+            },
+            HarHeader {
+                name: "Authorization".to_string(),
+                value: "Bearer token".to_string(),
+            },
+            HarHeader {
+                name: "sec-fetch-mode".to_string(),
+                value: "cors".to_string(),
+            },
+        ];
+        let filtered = filter_headers(&headers);
+        assert_eq!(filtered.len(), 2);
+        assert!(filtered.iter().any(|(n, _)| n == "Accept"));
+        assert!(filtered.iter().any(|(n, _)| n == "Authorization"));
+    }
+
+    #[test]
+    fn test_format_header_key() {
+        assert_eq!(format_header_key("Content-Type"), "\"Content-Type\"");
+        assert_eq!(format_header_key("X-Custom"), "\"X-Custom\"");
+    }
+
+    #[test]
+    fn test_format_header_key_escapes_quotes() {
+        // Header names with quotes should be escaped
+        assert_eq!(format_header_key("X-\"Test\""), "\"X-\\\"Test\\\"\"");
+        assert_eq!(format_header_key("X-Back\\slash"), "\"X-Back\\\\slash\"");
+    }
+
+    #[test]
+    fn test_format_body_with_triple_quotes() {
+        // Body containing ''' should use escaped basic string
+        let body_with_quotes = "some text with ''' in it";
+        let result = format_body(body_with_quotes);
+        assert!(result.starts_with("body = \""));
+        assert!(result.contains("'''"));
+        assert!(!result.contains("body = '''"));
+    }
+
+    #[test]
+    fn test_format_body_normal() {
+        // Normal body should use literal string
+        let normal_body = "{\"key\": \"value\"}";
+        let result = format_body(normal_body);
+        assert!(result.starts_with("body = '''"));
+    }
+
+    #[test]
+    fn test_import_har_single_url() {
+        let har = r#"{
+            "log": {
+                "entries": [{
+                    "request": {
+                        "method": "GET",
+                        "url": "https://api.example.com/health",
+                        "headers": []
+                    }
+                }]
+            }
+        }"#;
+
+        let mut file = NamedTempFile::new().unwrap();
+        file.write_all(har.as_bytes()).unwrap();
+
+        let result = import_har(file.path(), None).unwrap();
+        assert!(result.contains("[target]"));
+        assert!(result.contains("url = \"https://api.example.com/health\""));
+        assert!(result.contains("method = \"GET\""));
+        assert!(result.contains("[load]"));
+    }
+
+    #[test]
+    fn test_import_har_multiple_urls_creates_scenarios() {
+        let har = r#"{
+            "log": {
+                "entries": [
+                    {"request": {"method": "GET", "url": "https://api.example.com/users", "headers": []}},
+                    {"request": {"method": "GET", "url": "https://api.example.com/posts", "headers": []}}
+                ]
+            }
+        }"#;
+
+        let mut file = NamedTempFile::new().unwrap();
+        file.write_all(har.as_bytes()).unwrap();
+
+        let result = import_har(file.path(), None).unwrap();
+        assert!(result.contains("[[scenarios]]"));
+        assert!(result.contains("/users"));
+        assert!(result.contains("/posts"));
+    }
+
+    #[test]
+    fn test_import_har_body_before_headers() {
+        let har = r#"{
+            "log": {
+                "entries": [{
+                    "request": {
+                        "method": "POST",
+                        "url": "https://api.example.com/data",
+                        "headers": [{"name": "Content-Type", "value": "application/json"}],
+                        "postData": {"text": "{\"key\": \"value\"}"}
+                    }
+                }]
+            }
+        }"#;
+
+        let mut file = NamedTempFile::new().unwrap();
+        file.write_all(har.as_bytes()).unwrap();
+
+        let result = import_har(file.path(), None).unwrap();
+
+        // Body must appear BEFORE [target.headers] to be valid TOML
+        let body_pos = result.find("body = '''").unwrap();
+        let headers_pos = result.find("[target.headers]").unwrap();
+        assert!(
+            body_pos < headers_pos,
+            "body must come before headers section"
+        );
+    }
+
+    #[test]
+    fn test_import_har_with_filter() {
+        let har = r#"{
+            "log": {
+                "entries": [
+                    {"request": {"method": "GET", "url": "https://api.example.com/v1/users", "headers": []}},
+                    {"request": {"method": "GET", "url": "https://api.example.com/v2/users", "headers": []}},
+                    {"request": {"method": "GET", "url": "https://cdn.example.com/image.png", "headers": []}}
+                ]
+            }
+        }"#;
+
+        let mut file = NamedTempFile::new().unwrap();
+        file.write_all(har.as_bytes()).unwrap();
+
+        let filter = Regex::new("api.example.com/v2").unwrap();
+        let result = import_har(file.path(), Some(&filter)).unwrap();
+
+        assert!(result.contains("/v2/users"));
+        assert!(!result.contains("/v1/users"));
+        assert!(!result.contains("cdn.example.com"));
+    }
+
+    #[test]
+    fn test_import_har_empty_file_fails() {
+        let har = r#"{"log": {"entries": []}}"#;
+
+        let mut file = NamedTempFile::new().unwrap();
+        file.write_all(har.as_bytes()).unwrap();
+
+        let result = import_har(file.path(), None);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("no requests"));
+    }
+
+    #[test]
+    fn test_import_har_skips_data_urls() {
+        let har = r#"{
+            "log": {
+                "entries": [
+                    {"request": {"method": "GET", "url": "data:text/plain;base64,SGVsbG8=", "headers": []}},
+                    {"request": {"method": "GET", "url": "https://api.example.com/health", "headers": []}}
+                ]
+            }
+        }"#;
+
+        let mut file = NamedTempFile::new().unwrap();
+        file.write_all(har.as_bytes()).unwrap();
+
+        let result = import_har(file.path(), None).unwrap();
+        assert!(!result.contains("data:text"));
+        assert!(result.contains("api.example.com"));
+    }
+
+    #[test]
+    fn test_import_har_weights_from_duplicates() {
+        let har = r#"{
+            "log": {
+                "entries": [
+                    {"request": {"method": "GET", "url": "https://api.example.com/health", "headers": []}},
+                    {"request": {"method": "GET", "url": "https://api.example.com/health", "headers": []}},
+                    {"request": {"method": "GET", "url": "https://api.example.com/health", "headers": []}},
+                    {"request": {"method": "POST", "url": "https://api.example.com/data", "headers": []}}
+                ]
+            }
+        }"#;
+
+        let mut file = NamedTempFile::new().unwrap();
+        file.write_all(har.as_bytes()).unwrap();
+
+        let result = import_har(file.path(), None).unwrap();
+        assert!(
+            result.contains("weight = 3"),
+            "GET /health should have weight 3"
+        );
     }
 }

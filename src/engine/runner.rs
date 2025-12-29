@@ -766,13 +766,21 @@ impl Engine {
             .grpc_method
             .clone()
             .ok_or("gRPC method not specified")?;
-        let request_body = self.config.body.clone().unwrap_or_default();
+
+        // Use binary body_bytes if available, otherwise fall back to string body as bytes
+        let request_bytes = self.config.body_bytes.clone().unwrap_or_else(|| {
+            self.config
+                .body
+                .as_ref()
+                .map(|s| s.as_bytes().to_vec())
+                .unwrap_or_default()
+        });
 
         let grpc_config = GrpcConfig {
             address,
             service,
             method,
-            request: request_body,
+            request: request_bytes,
             timeout: self.config.timeout,
             tls,
             insecure: self.config.insecure,
