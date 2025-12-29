@@ -15,7 +15,7 @@ grpc = ["tonic", "prost", "prost-types", "bytes"]
 
 [dependencies]
 tokio = { version = "1", features = ["full"] }
-reqwest = { version = "0.12", features = ["gzip", "brotli", "rustls-tls", "cookies"] }
+reqwest = { version = "0.12", default-features = false, features = ["gzip", "brotli", "rustls-tls", "cookies", "charset", "http2", "macos-system-configuration"] }
 tokio-tungstenite = { version = "0.26", features = ["rustls-tls-webpki-roots"] }
 futures-util = "0.3"
 clap = { version = "4", features = ["derive"] }
