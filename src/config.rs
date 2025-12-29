@@ -391,10 +391,8 @@ pub fn merge_config(args: &RunArgs, toml: Option<TomlConfig>) -> Result<LoadConf
                         fs::read(path)
                             .map_err(|e| format!("Failed to read body file '{}': {}", path, e))?,
                     )
-                } else if let Some(ref body) = toml.target.body {
-                    Some(body.as_bytes().to_vec())
                 } else {
-                    None
+                    toml.target.body.as_ref().map(|body| body.as_bytes().to_vec())
                 }
             } else {
                 None

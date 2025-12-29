@@ -60,6 +60,7 @@ pub enum GrpcMethod {
 
 /// Result of a gRPC call
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct GrpcResult {
     /// Latency in microseconds
     pub latency_us: u64,
@@ -85,6 +86,7 @@ pub struct GrpcResult {
 
 /// gRPC-specific errors
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub enum GrpcError {
     /// Connection failed
     Connect(String),
@@ -100,6 +102,7 @@ pub enum GrpcError {
     Other(String),
 }
 
+#[allow(dead_code)]
 impl GrpcError {
     pub fn as_str(&self) -> &'static str {
         match self {

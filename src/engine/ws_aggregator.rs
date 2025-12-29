@@ -5,6 +5,7 @@ use std::time::{Duration, Instant};
 use tokio::sync::{mpsc, watch};
 use tokio_util::sync::CancellationToken;
 
+#[allow(dead_code)]
 pub struct WsAggregator {
     stats: WsStats,
     duration: Duration,

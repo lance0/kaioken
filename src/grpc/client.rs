@@ -12,6 +12,7 @@ pub struct GrpcClient {
     channel: Channel,
 }
 
+#[allow(dead_code)]
 impl GrpcClient {
     /// Create a new gRPC client
     pub async fn new(address: &str, tls: bool, _insecure: bool) -> Result<Self, GrpcError> {
@@ -175,10 +176,10 @@ async fn execute_unary(
     let mut request = Request::new(request_bytes);
 
     for (key, value) in &config.metadata {
-        if let Ok(key) = key.parse::<tonic::metadata::MetadataKey<tonic::metadata::Ascii>>() {
-            if let Ok(value) = value.parse() {
-                request.metadata_mut().insert(key, value);
-            }
+        if let Ok(key) = key.parse::<tonic::metadata::MetadataKey<tonic::metadata::Ascii>>()
+            && let Ok(value) = value.parse()
+        {
+            request.metadata_mut().insert(key, value);
         }
     }
 
@@ -243,10 +244,10 @@ async fn execute_server_stream(
     let mut request = Request::new(request_bytes);
 
     for (key, value) in &config.metadata {
-        if let Ok(key) = key.parse::<tonic::metadata::MetadataKey<tonic::metadata::Ascii>>() {
-            if let Ok(value) = value.parse() {
-                request.metadata_mut().insert(key, value);
-            }
+        if let Ok(key) = key.parse::<tonic::metadata::MetadataKey<tonic::metadata::Ascii>>()
+            && let Ok(value) = value.parse()
+        {
+            request.metadata_mut().insert(key, value);
         }
     }
 

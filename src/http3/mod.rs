@@ -9,4 +9,5 @@
 
 mod client;
 
+#[allow(unused_imports)]
 pub use client::{Http3Client, Http3Response, execute_http3_request};

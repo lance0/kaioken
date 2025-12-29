@@ -13,5 +13,7 @@
 mod client;
 mod types;
 
+#[allow(unused_imports)]
 pub use client::{GrpcClient, execute_grpc_request};
+#[allow(unused_imports)]
 pub use types::{GrpcConfig, GrpcError, GrpcMethod, GrpcResult};

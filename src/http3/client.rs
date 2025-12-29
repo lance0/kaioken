@@ -99,7 +99,7 @@ impl Http3Client {
 }
 
 /// Execute an HTTP/3 request and return the result
-#[allow(dead_code)]
+#[allow(dead_code, clippy::too_many_arguments)]
 pub async fn execute_http3_request(
     client: &Http3Client,
     addr: SocketAddr,

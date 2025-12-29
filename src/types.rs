@@ -243,6 +243,7 @@ pub enum WsErrorKind {
     Other,
 }
 
+#[allow(dead_code)]
 impl WsErrorKind {
     pub fn as_str(&self) -> &'static str {
         match self {

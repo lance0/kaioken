@@ -24,6 +24,7 @@ pub struct WsStats {
     rolling_window: Vec<(Instant, u64)>,
 }
 
+#[allow(dead_code)]
 impl WsStats {
     pub fn new() -> Self {
         let message_histogram = Histogram::<u64>::new_with_bounds(1, 60_000_000, 3)

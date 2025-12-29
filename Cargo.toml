@@ -50,7 +50,7 @@ bytes = { version = "1", optional = true }
 http = { version = "1", optional = true }
 
 # gRPC support (optional, enable with --features grpc)
-tonic = { version = "0.12", optional = true, features = ["tls", "channel"] }
+tonic = { version = "0.12", optional = true, default-features = false, features = ["tls-native-roots", "channel", "codegen"] }
 prost = { version = "0.13", optional = true }
 prost-types = { version = "0.13", optional = true }
 

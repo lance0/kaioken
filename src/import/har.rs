@@ -21,6 +21,7 @@ struct HarLog {
 struct HarEntry {
     request: HarRequest,
     #[serde(default)]
+    #[allow(dead_code)]
     response: Option<HarResponse>,
 }
 
@@ -47,10 +48,12 @@ struct HarPostData {
     text: Option<String>,
     #[serde(default)]
     #[serde(rename = "mimeType")]
+    #[allow(dead_code)]
     mime_type: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct HarResponse {
     status: u16,
 }
@@ -164,12 +167,11 @@ pub fn import_har(path: &Path, filter: Option<&Regex>) -> Result<String, String>
             }
 
             // Add body BEFORE headers (must be in [[scenarios]] table, not [scenarios.headers])
-            if let Some(ref post_data) = entry.request.post_data {
-                if let Some(ref text) = post_data.text {
-                    if !text.is_empty() {
-                        config.push_str(&format_body(text));
-                    }
-                }
+            if let Some(ref post_data) = entry.request.post_data
+                && let Some(ref text) = post_data.text
+                && !text.is_empty()
+            {
+                config.push_str(&format_body(text));
             }
 
             // Add headers AFTER body
@@ -196,12 +198,11 @@ pub fn import_har(path: &Path, filter: Option<&Regex>) -> Result<String, String>
         config.push_str(&format!("method = \"{}\"\n", entry.request.method));
 
         // Add body BEFORE headers (must be in [target] table, not [target.headers])
-        if let Some(ref post_data) = entry.request.post_data {
-            if let Some(ref text) = post_data.text {
-                if !text.is_empty() {
-                    config.push_str(&format_body(text));
-                }
-            }
+        if let Some(ref post_data) = entry.request.post_data
+            && let Some(ref text) = post_data.text
+            && !text.is_empty()
+        {
+            config.push_str(&format_body(text));
         }
 
         // Add headers AFTER body
