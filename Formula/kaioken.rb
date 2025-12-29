@@ -5,7 +5,7 @@
 class Kaioken < Formula
   desc "High-performance HTTP load testing tool with real-time TUI"
   homepage "https://github.com/lance0/kaioken"
-  version "1.1.0"
+  version "1.1.1"
   license any_of: ["MIT", "Apache-2.0"]
 
   on_macos do
