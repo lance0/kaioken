@@ -668,6 +668,8 @@ pub struct LoadConfig {
     pub burst_config: Option<BurstConfig>,
     /// SQLite database path for logging snapshots
     pub db_url: Option<PathBuf>,
+    /// Prometheus metrics export configuration
+    pub prometheus: Option<PrometheusConfig>,
 }
 
 /// Burst mode configuration - send N requests, wait, repeat
@@ -675,6 +677,15 @@ pub struct LoadConfig {
 pub struct BurstConfig {
     pub requests_per_burst: u32,
     pub delay_between_bursts: Duration,
+}
+
+/// Prometheus metrics export configuration
+#[derive(Debug, Clone)]
+pub enum PrometheusConfig {
+    /// Push metrics to a Pushgateway URL
+    Pushgateway { url: String },
+    /// Expose metrics on a local HTTP endpoint
+    Endpoint { port: u16 },
 }
 
 impl Default for LoadConfig {
@@ -728,6 +739,7 @@ impl Default for LoadConfig {
             connect_to: None,
             burst_config: None,
             db_url: None,
+            prometheus: None,
         }
     }
 }

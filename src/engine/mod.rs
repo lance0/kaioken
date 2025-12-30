@@ -1,5 +1,6 @@
 mod aggregator;
 mod arrival_rate;
+pub mod prometheus;
 mod runner;
 mod scheduler;
 mod snapshot;

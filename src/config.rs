@@ -158,6 +158,10 @@ pub struct LoadSettings {
     /// Delay between bursts
     #[serde(default, with = "humantime_serde::option")]
     pub burst_delay: Option<Duration>,
+    /// Push metrics to Prometheus Pushgateway URL
+    pub prometheus_pushgateway: Option<String>,
+    /// Expose Prometheus metrics on this port
+    pub prometheus_port: Option<u16>,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -228,6 +232,7 @@ fn interpolate_env_vars(content: &str) -> Result<String, String> {
     Ok(result)
 }
 
+#[allow(clippy::manual_map)]
 pub fn merge_config(args: &RunArgs, toml: Option<TomlConfig>) -> Result<LoadConfig, String> {
     let toml = toml.unwrap_or_default();
 
@@ -698,6 +703,19 @@ pub fn merge_config(args: &RunArgs, toml: Option<TomlConfig>) -> Result<LoadConf
     // db_url for SQLite logging
     let db_url = args.db_url.clone();
 
+    // Prometheus metrics export
+    let prometheus = if let Some(ref url) = args.prometheus_pushgateway {
+        Some(crate::types::PrometheusConfig::Pushgateway { url: url.clone() })
+    } else if let Some(port) = args.prometheus_port {
+        Some(crate::types::PrometheusConfig::Endpoint { port })
+    } else if let Some(ref url) = toml.load.prometheus_pushgateway {
+        Some(crate::types::PrometheusConfig::Pushgateway { url: url.clone() })
+    } else if let Some(port) = toml.load.prometheus_port {
+        Some(crate::types::PrometheusConfig::Endpoint { port })
+    } else {
+        None
+    };
+
     Ok(LoadConfig {
         url,
         method,
@@ -747,6 +765,7 @@ pub fn merge_config(args: &RunArgs, toml: Option<TomlConfig>) -> Result<LoadConf
         connect_to,
         burst_config,
         db_url,
+        prometheus,
     })
 }
 

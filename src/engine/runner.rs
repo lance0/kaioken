@@ -280,6 +280,8 @@ impl Engine {
             max_vus,
             initial_target_rate,
             self.config.db_url.clone(),
+            self.config.prometheus.clone(),
+            &self.config.url,
         );
         let aggregator_handle = tokio::spawn(aggregator.run());
 
@@ -531,6 +533,8 @@ impl Engine {
             self.config.max_requests,
             self.cancel_token.clone(),
             self.config.db_url.clone(),
+            self.config.prometheus.clone(),
+            &self.config.url,
         );
         let aggregator_handle = tokio::spawn(aggregator.run());
 
@@ -696,6 +700,8 @@ impl Engine {
             self.config.max_requests,
             self.cancel_token.clone(),
             self.config.db_url.clone(),
+            self.config.prometheus.clone(),
+            &self.config.url,
         );
         let aggregator_handle = tokio::spawn(aggregator.run());
 
@@ -860,6 +866,8 @@ impl Engine {
             self.config.max_requests,
             self.cancel_token.clone(),
             self.config.db_url.clone(),
+            self.config.prometheus.clone(),
+            &self.config.url,
         );
         let aggregator_handle = tokio::spawn(aggregator.run());
 
@@ -1006,6 +1014,8 @@ impl Engine {
             self.config.max_requests,
             self.cancel_token.clone(),
             self.config.db_url.clone(),
+            self.config.prometheus.clone(),
+            &self.config.url,
         );
         let aggregator_handle = tokio::spawn(aggregator.run());
 

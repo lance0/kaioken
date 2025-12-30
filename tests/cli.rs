@@ -661,3 +661,64 @@ mod v1_3_features {
             .stderr(predicate::str::contains("cannot be used with"));
     }
 }
+
+mod prometheus_cli {
+    use super::*;
+
+    #[test]
+    fn help_shows_prometheus_flags() {
+        kaioken()
+            .args(["run", "--help"])
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("--prometheus-pushgateway"))
+            .stdout(predicate::str::contains("--prometheus-port"));
+    }
+
+    #[test]
+    fn prometheus_pushgateway_flag_accepted() {
+        kaioken()
+            .args([
+                "run",
+                "https://example.com",
+                "--prometheus-pushgateway",
+                "http://localhost:9091",
+                "--dry-run",
+            ])
+            .assert()
+            .success()
+            .stderr(predicate::str::contains("Configuration validated"));
+    }
+
+    #[test]
+    fn prometheus_port_flag_accepted() {
+        kaioken()
+            .args([
+                "run",
+                "https://example.com",
+                "--prometheus-port",
+                "9090",
+                "--dry-run",
+            ])
+            .assert()
+            .success()
+            .stderr(predicate::str::contains("Configuration validated"));
+    }
+
+    #[test]
+    fn prometheus_flags_are_mutually_exclusive() {
+        kaioken()
+            .args([
+                "run",
+                "https://example.com",
+                "--prometheus-pushgateway",
+                "http://localhost:9091",
+                "--prometheus-port",
+                "9090",
+                "--dry-run",
+            ])
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("cannot be used with"));
+    }
+}

@@ -5,6 +5,73 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] - 2025-12-30
+
+### Added
+
+- **Prometheus metrics export** - Export real-time metrics for Grafana dashboards:
+
+  **Push to Pushgateway:**
+  ```bash
+  # Start Pushgateway (Docker)
+  docker run -d -p 9091:9091 prom/pushgateway
+
+  # Run load test with metrics push
+  kaioken run https://api.example.com -c 50 -d 60s \
+    --prometheus-pushgateway http://localhost:9091
+  ```
+
+  **Expose /metrics endpoint:**
+  ```bash
+  # Run load test with Prometheus scrape endpoint
+  kaioken run https://api.example.com -c 50 -d 60s --prometheus-port 9090
+
+  # Scrape metrics from another terminal
+  curl http://localhost:9090/metrics
+  ```
+
+  **TOML config:**
+  ```toml
+  [load]
+  # Option 1: Push to Pushgateway
+  prometheus_pushgateway = "http://localhost:9091"
+
+  # Option 2: Expose endpoint (mutually exclusive)
+  # prometheus_port = 9090
+  ```
+
+  **Metrics exported (all prefixed with `kaioken_`):**
+  | Metric | Type | Description |
+  |--------|------|-------------|
+  | `kaioken_requests_total` | Counter | Total requests made |
+  | `kaioken_requests_success_total` | Counter | Successful requests |
+  | `kaioken_requests_failed_total` | Counter | Failed requests |
+  | `kaioken_rps` | Gauge | Current requests per second |
+  | `kaioken_error_rate` | Gauge | Current error rate (0.0-1.0) |
+  | `kaioken_latency_p50_ms` | Gauge | 50th percentile latency |
+  | `kaioken_latency_p95_ms` | Gauge | 95th percentile latency |
+  | `kaioken_latency_p99_ms` | Gauge | 99th percentile latency |
+  | `kaioken_latency_p999_ms` | Gauge | 99.9th percentile latency |
+  | `kaioken_vus_active` | Gauge | Active virtual users |
+  | `kaioken_vus_max` | Gauge | Maximum virtual users |
+  | `kaioken_bytes_received_total` | Counter | Total bytes received |
+  | `kaioken_dropped_iterations_total` | Counter | Dropped iterations |
+
+  **Grafana queries:**
+  ```promql
+  # RPS over time
+  kaioken_rps{job="kaioken"}
+
+  # P99 latency
+  kaioken_latency_p99_ms{job="kaioken"}
+
+  # Error rate percentage
+  kaioken_error_rate{job="kaioken"} * 100
+
+  # Active VUs
+  kaioken_vus_active{job="kaioken"}
+  ```
+
 ## [1.3.0] - 2025-12-30
 
 ### Added

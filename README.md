@@ -31,6 +31,7 @@ A Rust-based HTTP load testing tool with real-time terminal UI and DBZ flavor.
 - **Burst mode** - Spike testing with N requests, delay, repeat
 - **SQLite logging** - Export snapshots to SQLite for analysis
 - **DNS override** - Route requests to different hosts (--connect-to)
+- **Prometheus export** - Real-time metrics for Grafana dashboards
 - **DBZ themes** - 6 color schemes (press `t` to cycle)
 
 ## vs Other Tools
@@ -59,6 +60,7 @@ A Rust-based HTTP load testing tool with real-time terminal UI and DBZ flavor.
 | **Random regex URLs** | ✅ | ❌ | ✅ | ❌ | ❌ |
 | **Burst mode** | ✅ | ❌ | ❌ | ❌ | ❌ |
 | **SQLite logging** | ✅ | ❌ | ✅ | ❌ | ❌ |
+| **Prometheus export** | ✅ | ✅ | ❌ | ❌ | ✅ |
 | **Config file** | TOML | JS | ❌ | Lua | Scala |
 | **Language** | Rust | Go | Rust | C | Scala |
 
@@ -307,6 +309,8 @@ kaioken run [OPTIONS] [URL]
 | `--db-url` | — | SQLite database for snapshot logging |
 | `--burst-rate` | — | Requests per burst (enables burst mode) |
 | `--burst-delay` | — | Delay between bursts (e.g., 1s) |
+| `--prometheus-pushgateway` | — | Push metrics to Prometheus Pushgateway URL |
+| `--prometheus-port` | — | Expose /metrics endpoint on this port |
 | `--http3` | false | Use HTTP/3 (QUIC) - experimental |
 | `--grpc-service` | — | gRPC service name (experimental) |
 | `--grpc-method` | — | gRPC method name (experimental) |
@@ -864,6 +868,88 @@ Supports unary calls and server streaming. The request body should be **raw prot
 **Limitations:** gRPC mode uses simple constant-VU execution. Options like
 `--arrival-rate`, `--rate`, `--think-time`, `--ramp-up`, and `[[scenarios]]` are ignored.
 The `--insecure` flag is not supported; use `http://` URLs for unencrypted connections.
+
+## Prometheus Metrics Export
+
+Export real-time metrics to Prometheus for Grafana dashboards. Two modes available:
+
+### Push to Pushgateway
+
+Push metrics every 100ms to a Prometheus Pushgateway:
+
+```bash
+# Start Pushgateway (Docker)
+docker run -d -p 9091:9091 prom/pushgateway
+
+# Run load test with metrics push
+kaioken run https://api.example.com -c 50 -d 60s \
+  --prometheus-pushgateway http://localhost:9091
+
+# View metrics
+curl http://localhost:9091/metrics | grep kaioken
+```
+
+### Expose /metrics Endpoint
+
+Serve a Prometheus-compatible HTTP endpoint for scraping:
+
+```bash
+# Run load test with metrics endpoint
+kaioken run https://api.example.com -c 50 -d 60s --prometheus-port 9090
+
+# Scrape metrics (in another terminal)
+curl http://localhost:9090/metrics
+```
+
+### TOML Config
+
+```toml
+[load]
+# Option 1: Push to Pushgateway
+prometheus_pushgateway = "http://localhost:9091"
+
+# Option 2: Expose endpoint (mutually exclusive with pushgateway)
+# prometheus_port = 9090
+```
+
+### Available Metrics
+
+All metrics are prefixed with `kaioken_` and include labels `job="kaioken"` and `instance="<target_url>"`:
+
+| Metric | Type | Description |
+|--------|------|-------------|
+| `kaioken_requests_total` | Counter | Total requests made |
+| `kaioken_requests_success_total` | Counter | Successful requests |
+| `kaioken_requests_failed_total` | Counter | Failed requests |
+| `kaioken_rps` | Gauge | Current requests per second |
+| `kaioken_error_rate` | Gauge | Current error rate (0.0-1.0) |
+| `kaioken_latency_p50_ms` | Gauge | 50th percentile latency |
+| `kaioken_latency_p95_ms` | Gauge | 95th percentile latency |
+| `kaioken_latency_p99_ms` | Gauge | 99th percentile latency |
+| `kaioken_latency_p999_ms` | Gauge | 99.9th percentile latency |
+| `kaioken_vus_active` | Gauge | Active virtual users |
+| `kaioken_vus_max` | Gauge | Maximum virtual users |
+| `kaioken_bytes_received_total` | Counter | Total bytes received |
+| `kaioken_dropped_iterations_total` | Counter | Dropped iterations (arrival rate) |
+
+### Grafana Queries
+
+```promql
+# RPS over time
+kaioken_rps{job="kaioken"}
+
+# P99 latency in milliseconds
+kaioken_latency_p99_ms{job="kaioken"}
+
+# Error rate as percentage
+kaioken_error_rate{job="kaioken"} * 100
+
+# Active VUs
+kaioken_vus_active{job="kaioken"}
+
+# Total requests (counter)
+rate(kaioken_requests_total{job="kaioken"}[1m])
+```
 
 ## CI Integration
 

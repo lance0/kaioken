@@ -21,7 +21,7 @@ Fast local load testing against HTTP endpoints with zero setup friction, real-ti
 | **HTTP/3** | ✅* | ❌ | ✅ | ❌ | ❌ |
 | **WebSocket** | ✅ | ✅ | ❌ | ❌ | ✅ |
 | **gRPC** | ✅* | ✅ | ❌ | ❌ | ✅ |
-| **Prometheus Export** | 🔜 v1.4 | ✅ | ❌ | ❌ | ✅ |
+| **Prometheus Export** | ✅ | ✅ | ❌ | ❌ | ✅ |
 | **Distributed Mode** | 🔜 v2.0 | ✅ (Cloud) | ❌ | ❌ | ✅ |
 | **Language** | Rust | Go | Rust | C | Scala |
 
@@ -197,16 +197,21 @@ Fast local load testing against HTTP endpoints with zero setup friction, real-ti
 - [x] **5-minute tutorial** - Quick start guide in README
 - [x] **Real-world examples** - Production-ready config templates in `examples/`
 
-### v1.4 — Observability & Integration
+### v1.4 — Prometheus Metrics Export ✓
 
-- [ ] **Prometheus metrics export** - Push to Pushgateway or expose `/metrics` endpoint
+- [x] **Prometheus metrics export** - Push to Pushgateway or expose `/metrics` endpoint
   - Real-time RPS, latency percentiles, error rates
-  - Grafana dashboard template included
+  - `--prometheus-pushgateway URL` - Push metrics every 100ms
+  - `--prometheus-port PORT` - Expose `/metrics` HTTP endpoint
+  - 13 metrics: requests, RPS, error rate, latency percentiles, VUs, bytes, dropped iterations
+
+### v1.5 — Observability & Integration
+
 - [ ] **InfluxDB export** - Time-series metrics for Grafana/Chronograf
 - [ ] **OpenTelemetry traces** - Distributed tracing support
 - [ ] **Import converters** - Postman collections, OpenAPI specs
 
-### v1.5 — Production Polish
+### v1.6 — Production Polish
 
 - [ ] **Documentation site** - Dedicated docs with searchable examples
 - [ ] **VS Code extension** - TOML schema validation, syntax highlighting, run button

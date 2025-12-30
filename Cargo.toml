@@ -1,6 +1,6 @@
 [package]
 name = "kaioken"
-version = "1.3.0"
+version = "1.4.0"
 edition = "2024"
 description = "A Rust-based HTTP load testing tool with real-time terminal UI and DBZ flavor"
 license = "MIT OR Apache-2.0"
@@ -45,6 +45,9 @@ rand = "0.9"
 
 # SQLite logging
 rusqlite = { version = "0.32", features = ["bundled"] }
+
+# Prometheus metrics export
+prometheus = "0.13"
 
 # HTTP/3 support (optional, enable with --features http3)
 h3 = { version = "0.0.8", optional = true }

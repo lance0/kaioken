@@ -206,6 +206,14 @@ pub struct RunArgs {
     #[arg(long, value_name = "PATH")]
     pub db_url: Option<PathBuf>,
 
+    /// Push metrics to Prometheus Pushgateway URL
+    #[arg(long, value_name = "URL", conflicts_with = "prometheus_port")]
+    pub prometheus_pushgateway: Option<String>,
+
+    /// Expose Prometheus metrics on this port (serves /metrics)
+    #[arg(long, value_name = "PORT", conflicts_with = "prometheus_pushgateway")]
+    pub prometheus_port: Option<u16>,
+
     /// Output format (json, csv, md)
     #[arg(long, default_value = "json")]
     pub format: String,
@@ -346,6 +354,8 @@ impl Default for RunArgs {
             cacert: None,
             connect_to: None,
             form: Vec::new(),
+            prometheus_pushgateway: None,
+            prometheus_port: None,
         }
     }
 }

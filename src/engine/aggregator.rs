@@ -1,5 +1,6 @@
+use crate::engine::prometheus::{PrometheusExporter, push_to_gateway, serve_metrics_endpoint};
 use crate::engine::{Stats, create_snapshot, create_snapshot_with_arrival_rate};
-use crate::types::{RequestResult, RunPhase, StatsSnapshot};
+use crate::types::{PrometheusConfig, RequestResult, RunPhase, StatsSnapshot};
 use rusqlite::Connection;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -25,9 +26,13 @@ pub struct Aggregator {
     target_rate: u32,
     // SQLite logging (optional)
     sqlite_conn: Option<Connection>,
+    // Prometheus metrics export (optional)
+    prometheus_exporter: Option<Arc<PrometheusExporter>>,
+    prometheus_config: Option<PrometheusConfig>,
 }
 
 impl Aggregator {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         duration: Duration,
         result_rx: mpsc::Receiver<RequestResult>,
@@ -37,6 +42,8 @@ impl Aggregator {
         max_requests: u64,
         cancel_token: CancellationToken,
         db_url: Option<PathBuf>,
+        prometheus: Option<PrometheusConfig>,
+        target_url: &str,
     ) -> Self {
         Self::with_arrival_rate_metrics(
             duration,
@@ -51,6 +58,8 @@ impl Aggregator {
             0,
             0,
             db_url,
+            prometheus,
+            target_url,
         )
     }
 
@@ -68,6 +77,8 @@ impl Aggregator {
         vus_max: u32,
         target_rate: u32,
         db_url: Option<PathBuf>,
+        prometheus: Option<PrometheusConfig>,
+        target_url: &str,
     ) -> Self {
         let in_warmup = !warmup_duration.is_zero();
         if !in_warmup {
@@ -82,6 +93,23 @@ impl Aggregator {
                 None
             }
         });
+
+        // Initialize Prometheus exporter if configured
+        let prometheus_exporter = prometheus
+            .as_ref()
+            .map(|_| Arc::new(PrometheusExporter::new(target_url)));
+
+        // Spawn metrics endpoint server if configured
+        if let Some(PrometheusConfig::Endpoint { port }) = &prometheus
+            && let Some(ref exporter) = prometheus_exporter
+        {
+            let exporter_clone = exporter.clone();
+            let cancel_clone = cancel_token.clone();
+            let port = *port;
+            tokio::spawn(async move {
+                serve_metrics_endpoint(port, exporter_clone, cancel_clone).await;
+            });
+        }
 
         Self {
             stats: Stats::new(duration),
@@ -98,6 +126,8 @@ impl Aggregator {
             vus_max,
             target_rate,
             sqlite_conn,
+            prometheus_exporter,
+            prometheus_config: prometheus,
         }
     }
 
@@ -178,9 +208,30 @@ impl Aggregator {
         };
 
         // Log snapshot to SQLite if configured
-        if let Some(ref conn) = self.sqlite_conn {
-            if let Err(e) = log_snapshot_to_sqlite(conn, &snapshot) {
-                tracing::warn!("Failed to log snapshot to SQLite: {}", e);
+        if let Some(ref conn) = self.sqlite_conn
+            && let Err(e) = log_snapshot_to_sqlite(conn, &snapshot)
+        {
+            tracing::warn!("Failed to log snapshot to SQLite: {}", e);
+        }
+
+        // Update and export Prometheus metrics if configured
+        if let Some(ref exporter) = self.prometheus_exporter {
+            // Update metrics synchronously (uses internal locks)
+            let exporter_clone = exporter.clone();
+            let snapshot_clone = snapshot.clone();
+            tokio::spawn(async move {
+                exporter_clone.update(&snapshot_clone).await;
+            });
+
+            // Push to Pushgateway if in push mode (fire-and-forget)
+            if let Some(PrometheusConfig::Pushgateway { ref url }) = self.prometheus_config {
+                let metrics = exporter.encode();
+                let url = url.clone();
+                tokio::spawn(async move {
+                    if let Err(e) = push_to_gateway(&url, &metrics).await {
+                        tracing::warn!("Failed to push to Prometheus Pushgateway: {}", e);
+                    }
+                });
             }
         }
 
