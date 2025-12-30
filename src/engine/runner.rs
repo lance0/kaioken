@@ -742,9 +742,8 @@ impl Engine {
                         } else {
                             None
                         };
-                        let basic_auth_ref = basic_auth
-                            .as_ref()
-                            .map(|(u, p)| (u.as_str(), p.as_deref()));
+                        let basic_auth_ref =
+                            basic_auth.as_ref().map(|(u, p)| (u.as_str(), p.as_deref()));
 
                         let result = crate::http::execute_request(
                             &client,

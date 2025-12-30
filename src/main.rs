@@ -629,11 +629,7 @@ async fn run_debug_request(config: &types::LoadConfig) -> Result<i32, String> {
 
             println!("\n{}", separator);
 
-            if status.is_success() {
-                Ok(0)
-            } else {
-                Ok(1)
-            }
+            if status.is_success() { Ok(0) } else { Ok(1) }
         }
         Err(e) => {
             println!("  Error: {}", e);

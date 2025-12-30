@@ -75,13 +75,11 @@ impl Aggregator {
         }
 
         // Initialize SQLite connection if db_url is provided
-        let sqlite_conn = db_url.and_then(|path| {
-            match init_sqlite_db(&path) {
-                Ok(conn) => Some(conn),
-                Err(e) => {
-                    tracing::warn!("Failed to initialize SQLite database: {}", e);
-                    None
-                }
+        let sqlite_conn = db_url.and_then(|path| match init_sqlite_db(&path) {
+            Ok(conn) => Some(conn),
+            Err(e) => {
+                tracing::warn!("Failed to initialize SQLite database: {}", e);
+                None
             }
         });
 
@@ -218,7 +216,10 @@ fn init_sqlite_db(path: &std::path::Path) -> Result<Connection, rusqlite::Error>
 }
 
 /// Log a snapshot to SQLite database
-fn log_snapshot_to_sqlite(conn: &Connection, snapshot: &StatsSnapshot) -> Result<(), rusqlite::Error> {
+fn log_snapshot_to_sqlite(
+    conn: &Connection,
+    snapshot: &StatsSnapshot,
+) -> Result<(), rusqlite::Error> {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     let timestamp_ms = SystemTime::now()

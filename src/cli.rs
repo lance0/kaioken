@@ -99,7 +99,12 @@ pub struct RunArgs {
     pub rate: u32,
 
     /// Requests per burst (enables burst mode)
-    #[arg(long, value_name = "N", requires = "burst_delay", conflicts_with = "arrival_rate")]
+    #[arg(
+        long,
+        value_name = "N",
+        requires = "burst_delay",
+        conflicts_with = "arrival_rate"
+    )]
     pub burst_rate: Option<u32>,
 
     /// Delay between bursts (e.g., 1s, 500ms)

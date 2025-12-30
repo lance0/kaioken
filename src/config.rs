@@ -629,9 +629,7 @@ pub fn merge_config(args: &RunArgs, toml: Option<TomlConfig>) -> Result<LoadConf
 
     // Validate: rand_regex_url and urls_from_file are mutually exclusive
     if rand_regex_url.is_some() && url_list.is_some() {
-        return Err(
-            "--rand-regex-url and --urls-from-file are mutually exclusive".to_string(),
-        );
+        return Err("--rand-regex-url and --urls-from-file are mutually exclusive".to_string());
     }
 
     // Load body lines from file
@@ -657,9 +655,7 @@ pub fn merge_config(args: &RunArgs, toml: Option<TomlConfig>) -> Result<LoadConf
 
     // Validate: body_lines and body/body_file are mutually exclusive
     if body_lines.is_some() && body.is_some() {
-        return Err(
-            "-Z/--body-lines and --body/--body-file are mutually exclusive".to_string(),
-        );
+        return Err("-Z/--body-lines and --body/--body-file are mutually exclusive".to_string());
     }
 
     // Parse connect_to (HOST:PORT:TARGET_HOST:TARGET_PORT or HOST:TARGET_IP:TARGET_PORT)

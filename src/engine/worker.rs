@@ -196,7 +196,12 @@ impl Worker {
                 // Body selection: body_lines takes priority over self.body
                 let body = if let Some(ref lines) = self.body_lines {
                     let line = &lines[(request_counter as usize - 1) % lines.len()];
-                    Some(interpolate_vars(line, request_id, timestamp_ms, &extracted_values))
+                    Some(interpolate_vars(
+                        line,
+                        request_id,
+                        timestamp_ms,
+                        &extracted_values,
+                    ))
                 } else {
                     self.body
                         .as_ref()
