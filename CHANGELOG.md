@@ -5,6 +5,175 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2025-12-30
+
+### Added
+
+- **Random URL generation from regex** - Generate dynamic URLs for each request:
+  ```bash
+  # Random user IDs (escape dots and special chars with \)
+  kaioken run --rand-regex-url 'https://api\.example\.com/users/[a-z]{3}[0-9]{2}'
+
+  # Random query params
+  kaioken run --rand-regex-url 'https://httpbin\.org/get\?id=[0-9]{4}'
+  ```
+  Note: Escape regex special characters (`.`, `?`, etc.) with backslash. Useful for cache busting and testing with realistic IDs.
+
+- **URL list from file** - Read URLs from a file, one per line, round-robin:
+  ```bash
+  # Create URL list
+  echo -e "https://api.example.com/users/1\nhttps://api.example.com/users/2" > urls.txt
+  kaioken run --urls-from-file urls.txt -c 50 -d 30s
+  ```
+  ```toml
+  [target]
+  urls_from_file = "urls.txt"
+  ```
+
+- **Body lines from file** - Each request gets the next line from a file (round-robin payloads):
+  ```bash
+  # Create payloads file (one JSON per line)
+  echo -e '{"id":1}\n{"id":2}\n{"id":3}' > payloads.jsonl
+  kaioken run https://api.example.com/users -m POST -Z payloads.jsonl -H "Content-Type: application/json"
+  ```
+  ```toml
+  [target]
+  body_lines_file = "payloads.jsonl"
+  ```
+
+- **DNS override (--connect-to)** - Override host resolution for testing:
+  ```bash
+  # Route production hostname to localhost
+  kaioken run https://api.prod.com/health --connect-to "api.prod.com:443:127.0.0.1:8080"
+
+  # Simplified format (hostname:target_ip:target_port)
+  kaioken run https://api.example.com --connect-to "api.example.com:127.0.0.1:8080"
+  ```
+  ```toml
+  [target]
+  connect_to = "api.example.com:443:127.0.0.1:8080"
+  ```
+  Useful for testing against staging/local servers with production hostnames.
+
+- **SQLite logging** - Log summary snapshots to SQLite database for post-analysis:
+  ```bash
+  kaioken run https://api.example.com -c 50 -d 60s --db-url results.db
+
+  # Query results afterward
+  sqlite3 results.db "SELECT elapsed_secs, rps, latency_p99_us FROM snapshots"
+  ```
+  ```toml
+  [load]
+  db_url = "results.db"
+  ```
+  Snapshots are logged every 100ms with metrics: rps, latency percentiles, error rate, etc.
+
+- **Burst mode** - Send N requests rapidly, wait, repeat (spike testing):
+  ```bash
+  # Send 100 requests, wait 1 second, repeat
+  kaioken run https://api.example.com --burst-rate 100 --burst-delay 1s -d 60s
+
+  # Spike test: 500 requests every 5 seconds
+  kaioken run https://api.example.com --burst-rate 500 --burst-delay 5s -d 5m
+  ```
+  ```toml
+  [load]
+  burst_rate = 100
+  burst_delay = "1s"
+  ```
+  Burst mode is mutually exclusive with arrival rate mode.
+
+### Changed
+
+- Updated `rand` dependency to 0.9 for compatibility with `rand_regex` crate
+
+## [1.2.0] - 2025-12-30
+
+### Added
+
+- **Proxy support** - Route requests through HTTP/HTTPS/SOCKS5 proxies:
+  ```bash
+  # HTTP proxy
+  kaioken run https://api.example.com -x http://proxy:8080
+
+  # SOCKS5 proxy
+  kaioken run https://api.example.com -x socks5://127.0.0.1:1080
+  ```
+  ```toml
+  [target]
+  proxy = "http://proxy:8080"
+  ```
+
+- **Basic authentication** - Authenticate with user:password credentials:
+  ```bash
+  kaioken run https://api.example.com -a admin:secret
+  ```
+  ```toml
+  [target]
+  basic_auth = "admin:secret"
+  ```
+
+- **Multipart form upload** - Upload files and form data (curl-like syntax):
+  ```bash
+  # Text field
+  kaioken run https://api.example.com -F "name=value"
+
+  # File upload
+  kaioken run https://api.example.com -F "file=@/path/to/upload.txt"
+
+  # File with custom filename and MIME type
+  kaioken run https://api.example.com -F "doc=@report.pdf;filename=final.pdf;type=application/pdf"
+
+  # Multiple fields
+  kaioken run https://api.example.com -F "user=test" -F "avatar=@photo.jpg"
+  ```
+  ```toml
+  [target]
+  form_data = ["field1=value1", "file=@/path/to/upload.txt"]
+  ```
+
+- **Client certificates (mTLS)** - Mutual TLS authentication for enterprise APIs:
+  ```bash
+  # Client certificate + key
+  kaioken run https://secure.example.com --cert client.crt --key client.key
+
+  # With custom CA (for self-signed server certs)
+  kaioken run https://secure.example.com --cert client.crt --key client.key --cacert ca.crt
+  ```
+  ```toml
+  [target]
+  cert = "/path/to/client.crt"
+  key = "/path/to/client.key"
+  cacert = "/path/to/ca.crt"
+  ```
+
+- **Debug mode** - Send a single request and print full request/response dump:
+  ```bash
+  # Debug before running load test
+  kaioken run https://api.example.com/health --debug
+
+  # Debug with custom headers and body
+  kaioken run https://api.example.com/users -m POST -H "Content-Type: application/json" -b '{"name":"test"}' --debug
+  ```
+  Shows request details (method, URL, headers, body), response (status, latency, headers), and pretty-printed JSON body.
+
+- **Disable keepalive** - Disable HTTP connection reuse for connection overhead testing:
+  ```bash
+  kaioken run https://api.example.com -c 10 -d 30s --disable-keepalive
+  ```
+  ```toml
+  [target]
+  disable_keepalive = true
+  ```
+  Each request creates a new TCP connection, useful for measuring TLS handshake and connection establishment overhead.
+
+- **k/m suffixes for -n flag** - Quality of life for specifying large request counts:
+  ```bash
+  kaioken run https://api.example.com -n 10k    # 10,000 requests
+  kaioken run https://api.example.com -n 1m     # 1,000,000 requests
+  kaioken run https://api.example.com -n 500K   # Case insensitive
+  ```
+
 ## [1.1.1] - 2025-12-29
 
 ### Fixed

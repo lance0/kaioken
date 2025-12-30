@@ -22,6 +22,15 @@ A Rust-based HTTP load testing tool with real-time terminal UI and DBZ flavor.
 - **Multiple outputs** - JSON, CSV, Markdown, and HTML reports
 - **Variable interpolation** - Dynamic `${REQUEST_ID}`, `${TIMESTAMP_MS}`, and extracted values
 - **HTTP/2 support** - Optional h2 prior knowledge mode
+- **Proxy support** - HTTP, HTTPS, and SOCKS5 proxies
+- **Basic auth** - Simple user:password authentication
+- **Multipart forms** - File uploads with curl-like `-F` syntax
+- **Client certificates** - mTLS authentication for enterprise APIs
+- **Debug mode** - Single request with full request/response dump
+- **Random regex URLs** - Generate dynamic URLs from regex patterns
+- **Burst mode** - Spike testing with N requests, delay, repeat
+- **SQLite logging** - Export snapshots to SQLite for analysis
+- **DNS override** - Route requests to different hosts (--connect-to)
 - **DBZ themes** - 6 color schemes (press `t` to cycle)
 
 ## vs Other Tools
@@ -43,6 +52,13 @@ A Rust-based HTTP load testing tool with real-time terminal UI and DBZ flavor.
 | **HTTP/3** | ✅* | ❌ | ✅ | ❌ | ❌ |
 | **WebSocket** | ✅ | ✅ | ❌ | ❌ | ✅ |
 | **gRPC** | ✅* | ✅ | ❌ | ❌ | ✅ |
+| **Proxy** | ✅ | ✅ | ✅ | ❌ | ✅ |
+| **Basic auth** | ✅ | ✅ | ✅ | ❌ | ✅ |
+| **Multipart upload** | ✅ | ✅ | ✅ | ❌ | ✅ |
+| **Client certs (mTLS)** | ✅ | ✅ | ✅ | ❌ | ✅ |
+| **Random regex URLs** | ✅ | ❌ | ✅ | ❌ | ❌ |
+| **Burst mode** | ✅ | ❌ | ❌ | ❌ | ❌ |
+| **SQLite logging** | ✅ | ❌ | ✅ | ❌ | ❌ |
 | **Config file** | TOML | JS | ❌ | Lua | Scala |
 | **Language** | Rust | Go | Rust | C | Scala |
 
@@ -140,7 +156,7 @@ kaioken run [OPTIONS] [URL]
 | `[URL]` | — | Target URL (required unless using `-f`) |
 | `-c, --concurrency` | 50 | Concurrent workers |
 | `-d, --duration` | 10s | Test duration |
-| `-n, --max-requests` | 0 | Stop after N requests (0 = unlimited) |
+| `-n, --max-requests` | 0 | Stop after N requests (0 = unlimited, supports k/m suffixes) |
 | `-r, --rate` | 0 | Max RPS (0 = unlimited) |
 | `--ramp-up` | 0s | Time to reach full concurrency |
 | `--warmup` | 0s | Warmup period (not measured) |
@@ -161,10 +177,25 @@ kaioken run [OPTIONS] [URL]
 | `--no-tui` | false | Headless mode |
 | `--json` | false | Shorthand for `--no-tui --format json` |
 | `--dry-run` | false | Validate config and exit |
+| `--debug` | false | Send single request, print full dump |
 | `--fail-fast` | false | Abort immediately on threshold breach |
 | `--serious` | false | Disable DBZ flavor |
 | `--insecure` | false | Skip TLS verification |
+| `--disable-keepalive` | false | Disable connection reuse |
 | `-y, --yes` | false | Skip remote target confirmation |
+| `-x, --proxy` | — | Proxy URL (http/https/socks5) |
+| `-a, --basic-auth` | — | Basic auth credentials (user:pass) |
+| `-F, --form` | — | Multipart form field (repeatable) |
+| `--cert` | — | Client certificate (PEM) for mTLS |
+| `--key` | — | Client private key (PEM) for mTLS |
+| `--cacert` | — | CA certificate (PEM) for custom CA |
+| `--rand-regex-url` | — | Generate URLs from regex pattern |
+| `--urls-from-file` | — | Read URLs from file (round-robin) |
+| `-Z, --body-lines` | — | Body lines from file (round-robin) |
+| `--connect-to` | — | DNS override (HOST:TARGET_IP:TARGET_PORT) |
+| `--db-url` | — | SQLite database for snapshot logging |
+| `--burst-rate` | — | Requests per burst (enables burst mode) |
+| `--burst-delay` | — | Delay between bursts (e.g., 1s) |
 | `--http3` | false | Use HTTP/3 (QUIC) - experimental |
 | `--grpc-service` | — | gRPC service name (experimental) |
 | `--grpc-method` | — | gRPC method name (experimental) |
@@ -259,6 +290,17 @@ connect_timeout = "2s"
 # insecure = false
 # cookie_jar = false  # Enable for session handling
 # follow_redirects = true  # Set false to not follow redirects
+# disable_keepalive = false  # Disable connection reuse
+
+# Authentication & security
+# proxy = "http://proxy:8080"  # HTTP/HTTPS/SOCKS5 proxy
+# basic_auth = "user:password"  # Basic authentication
+# cert = "/path/to/client.crt"  # Client certificate (mTLS)
+# key = "/path/to/client.key"   # Client private key (mTLS)
+# cacert = "/path/to/ca.crt"    # Custom CA certificate
+
+# Multipart form data (alternative to body)
+# form_data = ["field=value", "file=@/path/to/upload.txt"]
 
 [target.headers]
 Authorization = "Bearer ${API_TOKEN}"
@@ -538,6 +580,135 @@ url = "wss://api.example.com/ws"
 message_interval = "100ms"
 mode = "echo"  # or "fire_and_forget"
 ```
+
+## Proxy Support
+
+Route requests through HTTP, HTTPS, or SOCKS5 proxies:
+
+```bash
+# HTTP proxy
+kaioken run https://api.example.com -x http://proxy:8080
+
+# SOCKS5 proxy
+kaioken run https://api.example.com -x socks5://127.0.0.1:1080
+
+# Authenticated proxy
+kaioken run https://api.example.com -x http://user:pass@proxy:8080
+```
+
+TOML config:
+```toml
+[target]
+url = "https://api.example.com"
+proxy = "http://proxy:8080"
+```
+
+## Basic Authentication
+
+Authenticate with username and password:
+
+```bash
+kaioken run https://api.example.com -a admin:secret
+```
+
+TOML config:
+```toml
+[target]
+url = "https://api.example.com"
+basic_auth = "admin:secret"
+```
+
+## Multipart Form Upload
+
+Upload files and form data using curl-like syntax:
+
+```bash
+# Text field
+kaioken run https://api.example.com -F "name=value"
+
+# File upload
+kaioken run https://api.example.com -F "file=@/path/to/upload.txt"
+
+# File with custom filename and MIME type
+kaioken run https://api.example.com -F "doc=@report.pdf;filename=final.pdf;type=application/pdf"
+
+# Multiple fields
+kaioken run https://api.example.com -m POST \
+  -F "user=test" \
+  -F "avatar=@photo.jpg"
+```
+
+TOML config:
+```toml
+[target]
+url = "https://api.example.com"
+method = "POST"
+form_data = ["field1=value1", "file=@/path/to/upload.txt"]
+```
+
+Note: `--form` and `--body` are mutually exclusive.
+
+## Client Certificates (mTLS)
+
+Authenticate with client certificates for mutual TLS:
+
+```bash
+# Client certificate + key
+kaioken run https://secure.example.com --cert client.crt --key client.key
+
+# With custom CA (for self-signed server certs)
+kaioken run https://secure.example.com \
+  --cert client.crt --key client.key --cacert ca.crt
+```
+
+TOML config:
+```toml
+[target]
+url = "https://secure.example.com"
+cert = "/path/to/client.crt"
+key = "/path/to/client.key"
+cacert = "/path/to/ca.crt"  # optional
+```
+
+Note: `--cert` and `--key` must be used together. Certificates must be in PEM format.
+
+## Debug Mode
+
+Send a single request and print full request/response details before running a load test:
+
+```bash
+# Simple GET
+kaioken run https://api.example.com/health --debug
+
+# POST with headers and body
+kaioken run https://api.example.com/users \
+  -m POST \
+  -H "Content-Type: application/json" \
+  -b '{"name":"test"}' \
+  --debug
+```
+
+Output shows:
+- Request: method, URL, headers, body (JSON pretty-printed)
+- Response: status, latency, headers, body
+- Errors: with actionable suggestions
+
+## Disable Keepalive
+
+Disable HTTP connection reuse to measure connection establishment overhead:
+
+```bash
+kaioken run https://api.example.com -c 10 -d 30s --disable-keepalive
+```
+
+TOML config:
+```toml
+[target]
+url = "https://api.example.com"
+disable_keepalive = true
+```
+
+Each request creates a new TCP connection. Useful for measuring TLS handshake and connection overhead.
 
 ## HTTP/3 (Experimental)
 

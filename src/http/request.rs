@@ -1,4 +1,4 @@
-use crate::types::{ErrorKind, RequestResult};
+use crate::types::{ErrorKind, FormField, RequestResult};
 use reqwest::{Client, Method};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
@@ -10,12 +10,15 @@ pub fn now_us() -> u64 {
         .as_micros() as u64
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn execute_request(
     client: &Client,
     url: &str,
     method: &Method,
     headers: &[(String, String)],
     body: Option<&str>,
+    form_data: Option<&[FormField]>,
+    basic_auth: Option<(&str, Option<&str>)>,
     capture_body: bool,
     scheduled_at_us: Option<u64>, // For latency correction
 ) -> RequestResult {
@@ -28,7 +31,23 @@ pub async fn execute_request(
         request = request.header(name.as_str(), value.as_str());
     }
 
-    if let Some(body_str) = body {
+    // Apply basic auth if provided
+    if let Some((username, password)) = basic_auth {
+        request = request.basic_auth(username, password);
+    }
+
+    // Build multipart form if form_data provided
+    if let Some(fields) = form_data {
+        match build_multipart_form(fields).await {
+            Ok(form) => {
+                request = request.multipart(form);
+            }
+            Err(_) => {
+                let latency_us = start.elapsed().as_micros() as u64;
+                return RequestResult::error(latency_us, ErrorKind::Other);
+            }
+        }
+    } else if let Some(body_str) = body {
         request = request.body(body_str.to_string());
     }
 
@@ -61,4 +80,47 @@ pub async fn execute_request(
     } else {
         result
     }
+}
+
+/// Build a multipart form from FormField entries
+async fn build_multipart_form(
+    fields: &[FormField],
+) -> Result<reqwest::multipart::Form, Box<dyn std::error::Error + Send + Sync>> {
+    use reqwest::multipart::{Form, Part};
+
+    let mut form = Form::new();
+
+    for field in fields {
+        match field {
+            FormField::Text { name, value } => {
+                form = form.text(name.clone(), value.clone());
+            }
+            FormField::File {
+                name,
+                path,
+                filename,
+                mime_type,
+            } => {
+                let bytes = tokio::fs::read(path).await?;
+                let file_name = filename
+                    .clone()
+                    .or_else(|| {
+                        path.file_name()
+                            .and_then(|n| n.to_str())
+                            .map(|s| s.to_string())
+                    })
+                    .unwrap_or_else(|| "file".to_string());
+
+                let mut part = Part::bytes(bytes).file_name(file_name);
+
+                if let Some(mime) = mime_type {
+                    part = part.mime_str(mime)?;
+                }
+
+                form = form.part(name.clone(), part);
+            }
+        }
+    }
+
+    Ok(form)
 }

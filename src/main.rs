@@ -185,6 +185,11 @@ async fn run_load_test(args: &RunArgs) -> Result<i32, String> {
     // Merge CLI args with config file
     let config = merge_config(args, toml_config)?;
 
+    // Debug mode - send single request and exit
+    if args.debug {
+        return run_debug_request(&config).await;
+    }
+
     // Dry run - validate and exit
     if args.dry_run {
         eprintln!("Configuration validated successfully!\n");
@@ -444,6 +449,226 @@ async fn run_load_test(args: &RunArgs) -> Result<i32, String> {
         Ok(1) // High error rate
     } else {
         Ok(0) // Success
+    }
+}
+
+async fn run_debug_request(config: &types::LoadConfig) -> Result<i32, String> {
+    use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
+    use std::time::Instant;
+
+    let separator = "=".repeat(80);
+
+    println!("{}", separator);
+    println!("{:^80}", "DEBUG: Single Request");
+    println!("{}", separator);
+
+    // Determine URL and method (use first scenario if available)
+    let (url, method, body, headers) = if !config.scenarios.is_empty() {
+        let s = &config.scenarios[0];
+        (
+            s.url.clone(),
+            s.method.clone(),
+            s.body.clone(),
+            s.headers.clone(),
+        )
+    } else {
+        (
+            config.url.clone(),
+            config.method.clone(),
+            config.body.clone(),
+            config.headers.clone(),
+        )
+    };
+
+    // Print request details
+    println!("\nRequest:");
+    println!("  {} {}", method, url);
+
+    if !headers.is_empty() {
+        println!("  Headers:");
+        for (k, v) in &headers {
+            // Mask sensitive headers
+            let display_value = if k.to_lowercase() == "authorization" {
+                if v.len() > 15 {
+                    format!("{}***", &v[..12])
+                } else {
+                    "***".to_string()
+                }
+            } else {
+                v.clone()
+            };
+            println!("    {}: {}", k, display_value);
+        }
+    }
+
+    if let Some(ref b) = body {
+        println!("  Body:");
+        // Pretty print if JSON, otherwise show as-is
+        if let Ok(json) = serde_json::from_str::<serde_json::Value>(b) {
+            if let Ok(pretty) = serde_json::to_string_pretty(&json) {
+                for line in pretty.lines() {
+                    println!("    {}", line);
+                }
+            } else {
+                println!("    {}", b);
+            }
+        } else {
+            // Truncate if too long
+            if b.len() > 500 {
+                println!("    {}... ({} bytes total)", &b[..500], b.len());
+            } else {
+                println!("    {}", b);
+            }
+        }
+    }
+
+    // Build client
+    let client = http::create_client(
+        1,
+        config.timeout,
+        config.connect_timeout,
+        config.insecure,
+        config.http2,
+        config.cookie_jar,
+        config.follow_redirects,
+        config.disable_keepalive,
+        config.proxy.as_deref(),
+        config.client_cert.as_deref(),
+        config.client_key.as_deref(),
+        config.ca_cert.as_deref(),
+        config.connect_to.as_ref().map(|(h, a)| (h.as_str(), *a)),
+    )
+    .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+
+    // Build request
+    let mut request = client.request(method.clone(), &url);
+
+    // Add headers
+    let mut header_map = HeaderMap::new();
+    for (k, v) in &headers {
+        if let (Ok(name), Ok(value)) = (
+            HeaderName::try_from(k.as_str()),
+            HeaderValue::from_str(v.as_str()),
+        ) {
+            header_map.insert(name, value);
+        }
+    }
+    request = request.headers(header_map);
+
+    // Add body
+    if let Some(ref b) = body {
+        request = request.body(b.clone());
+    }
+
+    // Send request and measure time
+    println!("\nSending request...");
+    let start = Instant::now();
+    let result = request.send().await;
+    let latency = start.elapsed();
+
+    println!("\n{}", "-".repeat(80));
+    println!("Response:");
+
+    match result {
+        Ok(response) => {
+            let status = response.status();
+            let headers = response.headers().clone();
+            let content_length = headers
+                .get("content-length")
+                .and_then(|v| v.to_str().ok())
+                .and_then(|v| v.parse::<u64>().ok());
+
+            println!(
+                "  Status: {} {}",
+                status.as_u16(),
+                status.canonical_reason().unwrap_or("")
+            );
+            println!("  Latency: {:.2}ms", latency.as_secs_f64() * 1000.0);
+
+            if let Some(len) = content_length {
+                println!("  Content-Length: {} bytes", len);
+            }
+
+            // Print response headers
+            if !headers.is_empty() {
+                println!("  Headers:");
+                for (name, value) in headers.iter() {
+                    if let Ok(v) = value.to_str() {
+                        println!("    {}: {}", name.as_str(), v);
+                    }
+                }
+            }
+
+            // Get body
+            match response.text().await {
+                Ok(body_text) => {
+                    if !body_text.is_empty() {
+                        println!("\nBody:");
+                        // Try to pretty-print JSON
+                        if let Ok(json) = serde_json::from_str::<serde_json::Value>(&body_text) {
+                            if let Ok(pretty) = serde_json::to_string_pretty(&json) {
+                                for line in pretty.lines().take(100) {
+                                    println!("  {}", line);
+                                }
+                                let line_count = pretty.lines().count();
+                                if line_count > 100 {
+                                    println!("  ... ({} more lines)", line_count - 100);
+                                }
+                            } else {
+                                print_body_text(&body_text);
+                            }
+                        } else {
+                            print_body_text(&body_text);
+                        }
+                    }
+                }
+                Err(e) => {
+                    println!("\n  (Failed to read body: {})", e);
+                }
+            }
+
+            println!("\n{}", separator);
+
+            if status.is_success() {
+                Ok(0)
+            } else {
+                Ok(1)
+            }
+        }
+        Err(e) => {
+            println!("  Error: {}", e);
+
+            // Provide helpful suggestions based on error type
+            if e.is_timeout() {
+                println!("\n  Suggestion: Request timed out. Try increasing --timeout");
+            } else if e.is_connect() {
+                println!(
+                    "\n  Suggestion: Connection failed. Check if the server is running and accessible"
+                );
+            } else if e.is_builder() {
+                println!("\n  Suggestion: Invalid request configuration. Check URL and headers");
+            }
+
+            println!("\n{}", separator);
+            Ok(1)
+        }
+    }
+}
+
+fn print_body_text(body: &str) {
+    const MAX_BODY_LINES: usize = 50;
+    const MAX_LINE_LEN: usize = 200;
+
+    let lines: Vec<&str> = body.lines().collect();
+    for line in lines.iter().take(MAX_BODY_LINES) {
+        if line.len() > MAX_LINE_LEN {
+            println!("  {}...", &line[..MAX_LINE_LEN]);
+        } else {
+            println!("  {}", line);
+        }
+    }
+    if lines.len() > MAX_BODY_LINES {
+        println!("  ... ({} more lines)", lines.len() - MAX_BODY_LINES);
     }
 }
 

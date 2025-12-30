@@ -1,7 +1,7 @@
 use crate::cli::RunArgs;
 use crate::types::{
-    Check, CheckCondition, Extraction, ExtractionSource, LoadConfig, Scenario, Stage, Threshold,
-    ThresholdMetric, ThresholdOp,
+    BurstConfig, Check, CheckCondition, Extraction, ExtractionSource, FormField, LoadConfig,
+    Scenario, Stage, Threshold, ThresholdMetric, ThresholdOp,
 };
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -104,6 +104,8 @@ pub struct TargetConfig {
     pub headers: HashMap<String, String>,
     pub body: Option<String>,
     pub body_file: Option<String>,
+    /// Body lines from file (one per request, round-robin)
+    pub body_lines_file: Option<String>,
     #[serde(default)]
     pub insecure: bool,
     #[serde(default)]
@@ -112,6 +114,28 @@ pub struct TargetConfig {
     pub cookie_jar: bool,
     #[serde(default = "default_true")]
     pub follow_redirects: bool,
+    /// HTTP/HTTPS/SOCKS5 proxy URL
+    pub proxy: Option<String>,
+    /// Basic authentication credentials (user:password)
+    pub basic_auth: Option<String>,
+    /// Client certificate file path (PEM format) for mTLS
+    pub cert: Option<String>,
+    /// Client private key file path (PEM format) for mTLS
+    pub key: Option<String>,
+    /// CA certificate file path (PEM format) for custom root CA
+    pub cacert: Option<String>,
+    /// Multipart form fields (name=value or name=@filepath for files)
+    #[serde(default)]
+    pub form_data: Vec<String>,
+    /// Disable HTTP keepalive (new connection per request)
+    #[serde(default)]
+    pub disable_keepalive: bool,
+    /// Generate random URLs from regex pattern
+    pub rand_regex_url: Option<String>,
+    /// Read URLs from file (one per line, round-robin)
+    pub urls_from_file: Option<String>,
+    /// Override host resolution (HOST:PORT:TARGET_HOST:TARGET_PORT)
+    pub connect_to: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -129,6 +153,11 @@ pub struct LoadSettings {
     pub think_time: Option<Duration>,
     pub arrival_rate: Option<u32>,
     pub max_vus: Option<u32>,
+    /// Requests per burst (enables burst mode)
+    pub burst_rate: Option<u32>,
+    /// Delay between bursts
+    #[serde(default, with = "humantime_serde::option")]
+    pub burst_delay: Option<Duration>,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -203,16 +232,39 @@ pub fn merge_config(args: &RunArgs, toml: Option<TomlConfig>) -> Result<LoadConf
     let toml = toml.unwrap_or_default();
 
     let has_scenarios = !toml.scenarios.is_empty();
-    let url = args.url.clone().or(toml.target.url).ok_or_else(|| {
-        if has_scenarios {
-            "URL is required in [target] section even when using [[scenarios]].\n\
+
+    // URL can come from: regular URL arg, rand_regex_url, first line of urls_from_file, or config
+    let url = args
+        .url
+        .clone()
+        .or_else(|| args.rand_regex_url.clone())
+        .or_else(|| {
+            // For urls_from_file, use first URL as the base
+            args.urls_from_file.as_ref().and_then(|path| {
+                std::fs::read_to_string(path)
+                    .ok()
+                    .and_then(|content| content.lines().next().map(String::from))
+            })
+        })
+        .or(toml.target.url)
+        .or(toml.target.rand_regex_url.clone())
+        .or_else(|| {
+            toml.target.urls_from_file.as_ref().and_then(|path| {
+                std::fs::read_to_string(path)
+                    .ok()
+                    .and_then(|content| content.lines().next().map(String::from))
+            })
+        })
+        .ok_or_else(|| {
+            if has_scenarios {
+                "URL is required in [target] section even when using [[scenarios]].\n\
                  The target URL is used as a fallback and for metadata.\n\
                  Add: [target]\n      url = \"https://your-api.com\""
-                .to_string()
-        } else {
-            "URL is required. Provide via argument or [target] section in config file.".to_string()
-        }
-    })?;
+                    .to_string()
+            } else {
+                "URL is required. Provide via argument, --rand-regex-url, --urls-from-file, or [target] section in config file.".to_string()
+            }
+        })?;
 
     let method_str = if args.method != "GET" {
         args.method.clone()
@@ -323,6 +375,7 @@ pub fn merge_config(args: &RunArgs, toml: Option<TomlConfig>) -> Result<LoadConf
     let grpc_method = args.grpc_method.clone();
     let cookie_jar = args.cookie_jar || toml.target.cookie_jar;
     let follow_redirects = !args.no_follow_redirects && toml.target.follow_redirects;
+    let disable_keepalive = args.disable_keepalive || toml.target.disable_keepalive;
 
     // Validate HTTP/3 requires HTTPS
     #[cfg(feature = "http3")]
@@ -458,6 +511,197 @@ pub fn merge_config(args: &RunArgs, toml: Option<TomlConfig>) -> Result<LoadConf
         }
     };
 
+    // Proxy - CLI takes precedence
+    let proxy = args.proxy.clone().or(toml.target.proxy);
+
+    // Basic auth - CLI takes precedence
+    let basic_auth = if let Some(ref auth_str) = args.basic_auth {
+        Some(parse_basic_auth(auth_str)?)
+    } else if let Some(ref auth_str) = toml.target.basic_auth {
+        Some(parse_basic_auth(auth_str)?)
+    } else {
+        None
+    };
+
+    // mTLS certificates - CLI takes precedence
+    let client_cert = args
+        .cert
+        .clone()
+        .or_else(|| toml.target.cert.as_ref().map(std::path::PathBuf::from));
+    let client_key = args
+        .key
+        .clone()
+        .or_else(|| toml.target.key.as_ref().map(std::path::PathBuf::from));
+    let ca_cert = args
+        .cacert
+        .clone()
+        .or_else(|| toml.target.cacert.as_ref().map(std::path::PathBuf::from));
+
+    // Validate: --cert and --key must be used together
+    if client_cert.is_some() != client_key.is_some() {
+        return Err("--cert and --key must be specified together for mTLS".to_string());
+    }
+
+    // Validate cert/key files exist
+    if let Some(ref path) = client_cert
+        && !path.exists()
+    {
+        return Err(format!(
+            "Client certificate file not found: {}",
+            path.display()
+        ));
+    }
+    if let Some(ref path) = client_key
+        && !path.exists()
+    {
+        return Err(format!("Client key file not found: {}", path.display()));
+    }
+    if let Some(ref path) = ca_cert
+        && !path.exists()
+    {
+        return Err(format!("CA certificate file not found: {}", path.display()));
+    }
+
+    // Multipart form fields - combine CLI args and config
+    let mut form_fields = Vec::new();
+    for field_str in &args.form {
+        let field = FormField::parse(field_str)?;
+        form_fields.push(field);
+    }
+    for field_str in &toml.target.form_data {
+        let field = FormField::parse(field_str)?;
+        form_fields.push(field);
+    }
+
+    // Validate: --form and --body are mutually exclusive
+    if !form_fields.is_empty() && body.is_some() {
+        return Err("--form and --body are mutually exclusive. Use one or the other.".to_string());
+    }
+
+    // Validate file paths in form fields exist
+    for field in &form_fields {
+        if let FormField::File { path, name, .. } = field
+            && !path.exists()
+        {
+            return Err(format!(
+                "Form file not found for field '{}': {}",
+                name,
+                path.display()
+            ));
+        }
+    }
+
+    // v1.3 features: rand_regex_url, urls_from_file, body_lines, connect_to, burst mode, db_url
+
+    // rand_regex_url - CLI takes precedence
+    let rand_regex_url = args.rand_regex_url.clone().or(toml.target.rand_regex_url);
+
+    // Load URLs from file
+    let url_list: Option<Vec<String>> = if let Some(ref path) = args.urls_from_file {
+        let content = fs::read_to_string(path)
+            .map_err(|e| format!("Failed to read URLs file '{}': {}", path.display(), e))?;
+        let urls: Vec<String> = content
+            .lines()
+            .map(|l| l.trim())
+            .filter(|l| !l.is_empty() && !l.starts_with('#'))
+            .map(String::from)
+            .collect();
+        if urls.is_empty() {
+            return Err(format!("URLs file '{}' is empty", path.display()));
+        }
+        Some(urls)
+    } else if let Some(ref path) = toml.target.urls_from_file {
+        let content = fs::read_to_string(path)
+            .map_err(|e| format!("Failed to read URLs file '{}': {}", path, e))?;
+        let urls: Vec<String> = content
+            .lines()
+            .map(|l| l.trim())
+            .filter(|l| !l.is_empty() && !l.starts_with('#'))
+            .map(String::from)
+            .collect();
+        if urls.is_empty() {
+            return Err(format!("URLs file '{}' is empty", path));
+        }
+        Some(urls)
+    } else {
+        None
+    };
+
+    // Validate: rand_regex_url and urls_from_file are mutually exclusive
+    if rand_regex_url.is_some() && url_list.is_some() {
+        return Err(
+            "--rand-regex-url and --urls-from-file are mutually exclusive".to_string(),
+        );
+    }
+
+    // Load body lines from file
+    let body_lines: Option<Vec<String>> = if let Some(ref path) = args.body_lines_file {
+        let content = fs::read_to_string(path)
+            .map_err(|e| format!("Failed to read body lines file '{}': {}", path.display(), e))?;
+        let lines: Vec<String> = content.lines().map(String::from).collect();
+        if lines.is_empty() {
+            return Err(format!("Body lines file '{}' is empty", path.display()));
+        }
+        Some(lines)
+    } else if let Some(ref path) = toml.target.body_lines_file {
+        let content = fs::read_to_string(path)
+            .map_err(|e| format!("Failed to read body lines file '{}': {}", path, e))?;
+        let lines: Vec<String> = content.lines().map(String::from).collect();
+        if lines.is_empty() {
+            return Err(format!("Body lines file '{}' is empty", path));
+        }
+        Some(lines)
+    } else {
+        None
+    };
+
+    // Validate: body_lines and body/body_file are mutually exclusive
+    if body_lines.is_some() && body.is_some() {
+        return Err(
+            "-Z/--body-lines and --body/--body-file are mutually exclusive".to_string(),
+        );
+    }
+
+    // Parse connect_to (HOST:PORT:TARGET_HOST:TARGET_PORT or HOST:TARGET_IP:TARGET_PORT)
+    let connect_to: Option<(String, std::net::SocketAddr)> =
+        if let Some(ref mapping) = args.connect_to {
+            Some(parse_connect_to(mapping)?)
+        } else if let Some(ref mapping) = toml.target.connect_to {
+            Some(parse_connect_to(mapping)?)
+        } else {
+            None
+        };
+
+    // Burst mode configuration
+    let burst_config = if let Some(burst_rate) = args.burst_rate {
+        let burst_delay = args
+            .burst_delay
+            .ok_or("--burst-rate requires --burst-delay")?;
+        Some(BurstConfig {
+            requests_per_burst: burst_rate,
+            delay_between_bursts: burst_delay,
+        })
+    } else if let Some(burst_rate) = toml.load.burst_rate {
+        let burst_delay = toml
+            .load
+            .burst_delay
+            .ok_or("burst_rate requires burst_delay in config")?;
+        Some(BurstConfig {
+            requests_per_burst: burst_rate,
+            delay_between_bursts: burst_delay,
+        })
+    } else {
+        None
+    };
+
+    // Validate: burst mode is incompatible with arrival rate
+    if burst_config.is_some() && arrival_rate.is_some() {
+        return Err("Burst mode (--burst-rate) is incompatible with --arrival-rate".to_string());
+    }
+
+    // db_url for SQLite logging
+    let db_url = args.db_url.clone();
+
     Ok(LoadConfig {
         url,
         method,
@@ -484,6 +728,7 @@ pub fn merge_config(args: &RunArgs, toml: Option<TomlConfig>) -> Result<LoadConf
         body_bytes,
         cookie_jar,
         follow_redirects,
+        disable_keepalive,
         thresholds,
         checks,
         stages,
@@ -494,7 +739,67 @@ pub fn merge_config(args: &RunArgs, toml: Option<TomlConfig>) -> Result<LoadConf
         latency_correction,
         ws_mode,
         ws_message_interval,
+        proxy,
+        basic_auth,
+        client_cert,
+        client_key,
+        ca_cert,
+        form_fields,
+        rand_regex_url,
+        url_list,
+        body_lines,
+        connect_to,
+        burst_config,
+        db_url,
     })
+}
+
+/// Parse connect_to mapping string
+/// Format: "HOST:PORT:TARGET_IP:TARGET_PORT" or "HOST:TARGET_IP:TARGET_PORT"
+fn parse_connect_to(mapping: &str) -> Result<(String, std::net::SocketAddr), String> {
+    let parts: Vec<&str> = mapping.split(':').collect();
+
+    match parts.len() {
+        // HOST:TARGET_IP:TARGET_PORT (e.g., "example.com:127.0.0.1:8080")
+        3 => {
+            let host = parts[0].to_string();
+            let target_addr = format!("{}:{}", parts[1], parts[2]);
+            let socket_addr: std::net::SocketAddr = target_addr
+                .parse()
+                .map_err(|e| format!("Invalid target address '{}': {}", target_addr, e))?;
+            Ok((host, socket_addr))
+        }
+        // HOST:PORT:TARGET_IP:TARGET_PORT (e.g., "example.com:443:127.0.0.1:8080")
+        4 => {
+            let target_addr = format!("{}:{}", parts[2], parts[3]);
+            let socket_addr: std::net::SocketAddr = target_addr
+                .parse()
+                .map_err(|e| format!("Invalid target address '{}': {}", target_addr, e))?;
+            // For reqwest resolve(), we only need the hostname, not the port
+            Ok((parts[0].to_string(), socket_addr))
+        }
+        _ => Err(format!(
+            "Invalid connect-to format: '{}'. Expected 'HOST:TARGET_IP:TARGET_PORT' or 'HOST:PORT:TARGET_IP:TARGET_PORT'",
+            mapping
+        )),
+    }
+}
+
+/// Parse basic auth string "user:password" or "user" into (user, Option<password>)
+fn parse_basic_auth(s: &str) -> Result<(String, Option<String>), String> {
+    if let Some(pos) = s.find(':') {
+        let user = s[..pos].to_string();
+        let pass = s[pos + 1..].to_string();
+        if user.is_empty() {
+            return Err("Basic auth username cannot be empty".to_string());
+        }
+        Ok((user, Some(pass)))
+    } else {
+        if s.is_empty() {
+            return Err("Basic auth username cannot be empty".to_string());
+        }
+        Ok((s.to_string(), None))
+    }
 }
 
 fn process_scenarios(configs: &[ScenarioConfig]) -> Result<Vec<Scenario>, String> {

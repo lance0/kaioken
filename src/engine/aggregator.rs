@@ -1,5 +1,7 @@
 use crate::engine::{Stats, create_snapshot, create_snapshot_with_arrival_rate};
 use crate::types::{RequestResult, RunPhase, StatsSnapshot};
+use rusqlite::Connection;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::time::{Duration, Instant};
@@ -21,6 +23,8 @@ pub struct Aggregator {
     vus_active: Option<Arc<AtomicU32>>,
     vus_max: u32,
     target_rate: u32,
+    // SQLite logging (optional)
+    sqlite_conn: Option<Connection>,
 }
 
 impl Aggregator {
@@ -32,6 +36,7 @@ impl Aggregator {
         phase_tx: watch::Sender<RunPhase>,
         max_requests: u64,
         cancel_token: CancellationToken,
+        db_url: Option<PathBuf>,
     ) -> Self {
         Self::with_arrival_rate_metrics(
             duration,
@@ -45,6 +50,7 @@ impl Aggregator {
             None,
             0,
             0,
+            db_url,
         )
     }
 
@@ -61,11 +67,23 @@ impl Aggregator {
         vus_active: Option<Arc<AtomicU32>>,
         vus_max: u32,
         target_rate: u32,
+        db_url: Option<PathBuf>,
     ) -> Self {
         let in_warmup = !warmup_duration.is_zero();
         if !in_warmup {
             let _ = phase_tx.send(RunPhase::Running);
         }
+
+        // Initialize SQLite connection if db_url is provided
+        let sqlite_conn = db_url.and_then(|path| {
+            match init_sqlite_db(&path) {
+                Ok(conn) => Some(conn),
+                Err(e) => {
+                    tracing::warn!("Failed to initialize SQLite database: {}", e);
+                    None
+                }
+            }
+        });
 
         Self {
             stats: Stats::new(duration),
@@ -81,6 +99,7 @@ impl Aggregator {
             vus_active,
             vus_max,
             target_rate,
+            sqlite_conn,
         }
     }
 
@@ -159,6 +178,75 @@ impl Aggregator {
         } else {
             create_snapshot(&self.stats)
         };
+
+        // Log snapshot to SQLite if configured
+        if let Some(ref conn) = self.sqlite_conn {
+            if let Err(e) = log_snapshot_to_sqlite(conn, &snapshot) {
+                tracing::warn!("Failed to log snapshot to SQLite: {}", e);
+            }
+        }
+
         let _ = self.snapshot_tx.send(snapshot);
     }
+}
+
+/// Initialize SQLite database with the required schema
+fn init_sqlite_db(path: &std::path::Path) -> Result<Connection, rusqlite::Error> {
+    let conn = Connection::open(path)?;
+
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS snapshots (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp_ms INTEGER NOT NULL,
+            elapsed_secs REAL NOT NULL,
+            total_requests INTEGER NOT NULL,
+            successful INTEGER NOT NULL,
+            failed INTEGER NOT NULL,
+            rps REAL NOT NULL,
+            latency_p50_us INTEGER NOT NULL,
+            latency_p95_us INTEGER NOT NULL,
+            latency_p99_us INTEGER NOT NULL,
+            latency_p999_us INTEGER NOT NULL,
+            error_rate REAL NOT NULL,
+            bytes_received INTEGER NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_snapshots_elapsed ON snapshots(elapsed_secs);",
+    )?;
+
+    Ok(conn)
+}
+
+/// Log a snapshot to SQLite database
+fn log_snapshot_to_sqlite(conn: &Connection, snapshot: &StatsSnapshot) -> Result<(), rusqlite::Error> {
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    let timestamp_ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0);
+
+    conn.execute(
+        "INSERT INTO snapshots (
+            timestamp_ms, elapsed_secs, total_requests, successful, failed,
+            rps, latency_p50_us, latency_p95_us, latency_p99_us, latency_p999_us,
+            error_rate, bytes_received
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+        rusqlite::params![
+            timestamp_ms,
+            snapshot.elapsed.as_secs_f64(),
+            snapshot.total_requests as i64,
+            snapshot.successful as i64,
+            snapshot.failed as i64,
+            snapshot.requests_per_sec,
+            snapshot.latency_p50_us as i64,
+            snapshot.latency_p95_us as i64,
+            snapshot.latency_p99_us as i64,
+            snapshot.latency_p999_us as i64,
+            snapshot.error_rate,
+            snapshot.bytes_received as i64,
+        ],
+    )?;
+
+    Ok(())
 }

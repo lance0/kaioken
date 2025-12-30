@@ -1,6 +1,8 @@
 use crate::engine::scheduler::RateLimiter;
 use crate::http::execute_request;
-use crate::types::{Check, CheckCondition, ExtractionSource, RequestResult, Scenario};
+use crate::types::{Check, CheckCondition, ExtractionSource, FormField, RequestResult, Scenario};
+use rand::Rng;
+use rand_regex::Regex as RandRegex;
 use reqwest::{Client, Method};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -25,6 +27,12 @@ pub struct Worker {
     think_time: Option<Duration>,
     checks: Arc<Vec<Check>>,
     check_tx: Option<mpsc::Sender<CheckResult>>,
+    form_fields: Arc<Vec<FormField>>,
+    basic_auth: Option<(String, Option<String>)>,
+    // v1.3.0 features
+    url_list: Option<Arc<Vec<String>>>,
+    body_lines: Option<Arc<Vec<String>>>,
+    rand_regex_generator: Option<RandRegex>,
 }
 
 #[derive(Debug, Clone)]
@@ -50,8 +58,18 @@ impl Worker {
         think_time: Option<Duration>,
         checks: Arc<Vec<Check>>,
         check_tx: Option<mpsc::Sender<CheckResult>>,
+        form_fields: Arc<Vec<FormField>>,
+        basic_auth: Option<(String, Option<String>)>,
+        url_list: Option<Arc<Vec<String>>>,
+        body_lines: Option<Arc<Vec<String>>>,
+        rand_regex_pattern: Option<&str>,
     ) -> Self {
         let total_weight: u32 = scenarios.iter().map(|s| s.weight).sum();
+
+        // Compile rand-regex pattern if provided
+        let rand_regex_generator = rand_regex_pattern.map(|pattern| {
+            RandRegex::compile(pattern, 100).expect("Invalid rand-regex-url pattern")
+        });
 
         Self {
             id,
@@ -69,6 +87,11 @@ impl Worker {
             think_time,
             checks,
             check_tx,
+            form_fields,
+            basic_auth,
+            url_list,
+            body_lines,
+            rand_regex_generator,
         }
     }
 
@@ -148,7 +171,17 @@ impl Worker {
                     scenario.extractions.clone(),
                 )
             } else {
-                let url = interpolate_vars(&self.url, request_id, timestamp_ms, &extracted_values);
+                // URL selection priority: rand_regex_generator > url_list > self.url
+                let base_url = if let Some(ref generator) = self.rand_regex_generator {
+                    let mut rng = rand::rng();
+                    rng.sample(generator)
+                } else if let Some(ref urls) = self.url_list {
+                    urls[(request_counter as usize - 1) % urls.len()].clone()
+                } else {
+                    self.url.clone()
+                };
+                let url = interpolate_vars(&base_url, request_id, timestamp_ms, &extracted_values);
+
                 let headers: Vec<(String, String)> = self
                     .headers
                     .iter()
@@ -159,12 +192,29 @@ impl Worker {
                         )
                     })
                     .collect();
-                let body = self
-                    .body
-                    .as_ref()
-                    .map(|b| interpolate_vars(b, request_id, timestamp_ms, &extracted_values));
+
+                // Body selection: body_lines takes priority over self.body
+                let body = if let Some(ref lines) = self.body_lines {
+                    let line = &lines[(request_counter as usize - 1) % lines.len()];
+                    Some(interpolate_vars(line, request_id, timestamp_ms, &extracted_values))
+                } else {
+                    self.body
+                        .as_ref()
+                        .map(|b| interpolate_vars(b, request_id, timestamp_ms, &extracted_values))
+                };
                 (url, self.method.clone(), headers, body, Vec::new())
             };
+
+            // Prepare form data and basic auth for the request
+            let form_data = if !self.form_fields.is_empty() {
+                Some(self.form_fields.as_slice())
+            } else {
+                None
+            };
+            let basic_auth_ref = self
+                .basic_auth
+                .as_ref()
+                .map(|(u, p)| (u.as_str(), p.as_deref()));
 
             let result = execute_request(
                 &self.client,
@@ -172,6 +222,8 @@ impl Worker {
                 &method,
                 &headers,
                 body.as_deref(),
+                form_data,
+                basic_auth_ref,
                 capture_body,
                 None, // No latency correction for closed-loop mode
             )

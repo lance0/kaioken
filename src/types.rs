@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::time::Duration;
 
 // ============================================================================
@@ -323,6 +324,70 @@ impl WsMessageResult {
 }
 
 // ============================================================================
+// Multipart Form Fields (v1.2)
+// ============================================================================
+
+/// A parsed form field for multipart requests
+#[derive(Debug, Clone)]
+pub enum FormField {
+    /// Simple text field: name=value
+    Text { name: String, value: String },
+    /// File field: name=@filepath with optional filename and mime type
+    File {
+        name: String,
+        path: PathBuf,
+        filename: Option<String>,
+        mime_type: Option<String>,
+    },
+}
+
+impl FormField {
+    /// Parse a form field string in curl-like format
+    /// - "name=value" -> Text field
+    /// - "name=@/path/to/file" -> File field
+    /// - "name=@/path;filename=custom.txt" -> File with custom filename
+    /// - "name=@/path;type=application/json" -> File with custom mime type
+    pub fn parse(s: &str) -> Result<Self, String> {
+        let eq_pos = s.find('=').ok_or("Form field must contain '='")?;
+        let name = s[..eq_pos].to_string();
+        let value = &s[eq_pos + 1..];
+
+        if name.is_empty() {
+            return Err("Form field name cannot be empty".to_string());
+        }
+
+        if let Some(file_spec) = value.strip_prefix('@') {
+            // File field: parse path and optional modifiers
+            let parts: Vec<&str> = file_spec.split(';').collect();
+            let path = PathBuf::from(parts[0]);
+            let mut filename = None;
+            let mut mime_type = None;
+
+            for part in parts.iter().skip(1) {
+                if let Some(fname) = part.strip_prefix("filename=") {
+                    filename = Some(fname.to_string());
+                } else if let Some(mtype) = part.strip_prefix("type=") {
+                    mime_type = Some(mtype.to_string());
+                }
+            }
+
+            Ok(FormField::File {
+                name,
+                path,
+                filename,
+                mime_type,
+            })
+        } else {
+            // Text field
+            Ok(FormField::Text {
+                name,
+                value: value.to_string(),
+            })
+        }
+    }
+}
+
+// ============================================================================
 // HTTP Request Result
 // ============================================================================
 
@@ -569,6 +634,7 @@ pub struct LoadConfig {
     pub body_bytes: Option<Vec<u8>>,
     pub cookie_jar: bool,
     pub follow_redirects: bool,
+    pub disable_keepalive: bool,
     pub thresholds: Vec<Threshold>,
     pub checks: Vec<Check>,
     pub stages: Vec<Stage>,
@@ -580,6 +646,35 @@ pub struct LoadConfig {
     // WebSocket options
     pub ws_mode: WsMode,
     pub ws_message_interval: Duration,
+    // Proxy and auth options (v1.2)
+    pub proxy: Option<String>,
+    pub basic_auth: Option<(String, Option<String>)>, // (username, optional password)
+    // mTLS options (v1.2)
+    pub client_cert: Option<PathBuf>,
+    pub client_key: Option<PathBuf>,
+    pub ca_cert: Option<PathBuf>,
+    // Multipart form data (v1.2)
+    pub form_fields: Vec<FormField>,
+    // v1.3 features
+    /// Generate random URLs from regex pattern
+    pub rand_regex_url: Option<String>,
+    /// URLs loaded from file (round-robin)
+    pub url_list: Option<Vec<String>>,
+    /// Body lines loaded from file (round-robin)
+    pub body_lines: Option<Vec<String>>,
+    /// DNS override (host, socket_addr)
+    pub connect_to: Option<(String, std::net::SocketAddr)>,
+    /// Burst mode configuration
+    pub burst_config: Option<BurstConfig>,
+    /// SQLite database path for logging snapshots
+    pub db_url: Option<PathBuf>,
+}
+
+/// Burst mode configuration - send N requests, wait, repeat
+#[derive(Debug, Clone)]
+pub struct BurstConfig {
+    pub requests_per_burst: u32,
+    pub delay_between_bursts: Duration,
 }
 
 impl Default for LoadConfig {
@@ -610,6 +705,7 @@ impl Default for LoadConfig {
             body_bytes: None,
             cookie_jar: false,
             follow_redirects: true,
+            disable_keepalive: false,
             thresholds: Vec::new(),
             checks: Vec::new(),
             stages: Vec::new(),
@@ -620,6 +716,18 @@ impl Default for LoadConfig {
             latency_correction: false,
             ws_mode: WsMode::default(),
             ws_message_interval: Duration::from_millis(100),
+            proxy: None,
+            basic_auth: None,
+            client_cert: None,
+            client_key: None,
+            ca_cert: None,
+            form_fields: Vec::new(),
+            rand_regex_url: None,
+            url_list: None,
+            body_lines: None,
+            connect_to: None,
+            burst_config: None,
+            db_url: None,
         }
     }
 }

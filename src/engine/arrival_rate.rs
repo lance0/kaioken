@@ -272,12 +272,16 @@ async fn execute_iteration(
         (url, base_method.clone(), headers, body)
     };
 
+    // Note: form_data and basic_auth are not supported in arrival rate mode yet
+    // (would require structural changes to pass through the executor)
     let result = execute_request(
         client,
         &url,
         &method,
         &headers,
         body.as_deref(),
+        None, // form_data - not supported in arrival rate mode
+        None, // basic_auth - not supported in arrival rate mode
         capture_body,
         scheduled_at_us,
     )

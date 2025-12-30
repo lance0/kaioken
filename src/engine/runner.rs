@@ -17,7 +17,7 @@ use crate::types::{
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::sync::{Semaphore, mpsc, watch};
 use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
@@ -72,6 +72,11 @@ impl Engine {
     fn is_arrival_rate_mode(&self) -> bool {
         self.config.arrival_rate.is_some()
             || self.config.stages.iter().any(|s| s.target_rate.is_some())
+    }
+
+    /// Check if burst mode is enabled
+    fn is_burst_mode(&self) -> bool {
+        self.config.burst_config.is_some()
     }
 
     /// Check if HTTP/3 mode is enabled
@@ -163,6 +168,11 @@ impl Engine {
             return self.run_arrival_rate_mode().await;
         }
 
+        // Check if we should use burst mode
+        if self.is_burst_mode() {
+            return self.run_burst_mode().await;
+        }
+
         // Otherwise, use constant VUs mode
         self.run_constant_vus_mode().await
     }
@@ -178,6 +188,15 @@ impl Engine {
             self.config.http2,
             self.config.cookie_jar,
             self.config.follow_redirects,
+            self.config.disable_keepalive,
+            self.config.proxy.as_deref(),
+            self.config.client_cert.as_deref(),
+            self.config.client_key.as_deref(),
+            self.config.ca_cert.as_deref(),
+            self.config
+                .connect_to
+                .as_ref()
+                .map(|(h, a)| (h.as_str(), *a)),
         )
         .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
 
@@ -260,6 +279,7 @@ impl Engine {
             Some(vus_active_ref.clone()),
             max_vus,
             initial_target_rate,
+            self.config.db_url.clone(),
         );
         let aggregator_handle = tokio::spawn(aggregator.run());
 
@@ -442,6 +462,15 @@ impl Engine {
             self.config.http2,
             self.config.cookie_jar,
             self.config.follow_redirects,
+            self.config.disable_keepalive,
+            self.config.proxy.as_deref(),
+            self.config.client_cert.as_deref(),
+            self.config.client_key.as_deref(),
+            self.config.ca_cert.as_deref(),
+            self.config
+                .connect_to
+                .as_ref()
+                .map(|(h, a)| (h.as_str(), *a)),
         )
         .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
 
@@ -501,6 +530,7 @@ impl Engine {
             self.phase_tx.clone(),
             self.config.max_requests,
             self.cancel_token.clone(),
+            self.config.db_url.clone(),
         );
         let aggregator_handle = tokio::spawn(aggregator.run());
 
@@ -532,6 +562,12 @@ impl Engine {
             })
         });
 
+        let form_fields = Arc::new(self.config.form_fields.clone());
+
+        // v1.3.0 features
+        let url_list = self.config.url_list.as_ref().map(|v| Arc::new(v.clone()));
+        let body_lines = self.config.body_lines.as_ref().map(|v| Arc::new(v.clone()));
+
         for id in 0..max_workers {
             let worker = Worker::new(
                 id,
@@ -548,6 +584,11 @@ impl Engine {
                 self.config.think_time,
                 checks.clone(),
                 check_tx.clone(),
+                form_fields.clone(),
+                self.config.basic_auth.clone(),
+                url_list.clone(),
+                body_lines.clone(),
+                self.config.rand_regex_url.as_deref(),
             );
             worker_handles.push(tokio::spawn(worker.run()));
         }
@@ -594,6 +635,168 @@ impl Engine {
         // Wait for check aggregator to drain all results
         if let Some(handle) = check_agg_handle {
             let _ = tokio::time::timeout(Duration::from_secs(1), handle).await;
+        }
+
+        let stats = aggregator_handle
+            .await
+            .map_err(|e| format!("Aggregator task failed: {}", e))?;
+
+        let final_state = if self.cancel_token.is_cancelled() {
+            RunState::Cancelled
+        } else {
+            RunState::Completed
+        };
+        let _ = self.state_tx.send(final_state);
+
+        Ok(stats)
+    }
+
+    /// Run burst mode - send N requests, wait, repeat
+    async fn run_burst_mode(self) -> Result<Stats, String> {
+        let burst_config = self
+            .config
+            .burst_config
+            .as_ref()
+            .ok_or("Burst config not set")?
+            .clone();
+
+        let client = create_client(
+            burst_config.requests_per_burst,
+            self.config.timeout,
+            self.config.connect_timeout,
+            self.config.insecure,
+            self.config.http2,
+            self.config.cookie_jar,
+            self.config.follow_redirects,
+            self.config.disable_keepalive,
+            self.config.proxy.as_deref(),
+            self.config.client_cert.as_deref(),
+            self.config.client_key.as_deref(),
+            self.config.ca_cert.as_deref(),
+            self.config
+                .connect_to
+                .as_ref()
+                .map(|(h, a)| (h.as_str(), *a)),
+        )
+        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+
+        let total_duration = self.config.warmup + self.config.duration;
+
+        let (result_tx, result_rx) = mpsc::channel::<RequestResult>(RESULT_CHANNEL_SIZE);
+
+        let _ = self.state_tx.send(RunState::Running);
+
+        // Create aggregator
+        let aggregator = Aggregator::new(
+            total_duration,
+            result_rx,
+            self.snapshot_tx.clone(),
+            self.config.warmup,
+            self.phase_tx.clone(),
+            self.config.max_requests,
+            self.cancel_token.clone(),
+            self.config.db_url.clone(),
+        );
+        let aggregator_handle = tokio::spawn(aggregator.run());
+
+        // Spawn burst executor
+        let url = self.config.url.clone();
+        let method = self.config.method.clone();
+        let headers = self.config.headers.clone();
+        let body = self.config.body.clone();
+        let cancel_token = self.cancel_token.clone();
+        let form_fields = Arc::new(self.config.form_fields.clone());
+        let basic_auth = self.config.basic_auth.clone();
+        let burst_result_tx = result_tx.clone();
+        drop(result_tx);
+
+        let burst_handle = tokio::spawn(async move {
+            let result_tx = burst_result_tx;
+            let start = Instant::now();
+            let mut burst_count = 0u64;
+
+            while start.elapsed() < total_duration && !cancel_token.is_cancelled() {
+                burst_count += 1;
+                tracing::debug!("Starting burst {}", burst_count);
+
+                // Send burst of requests concurrently
+                let mut handles = Vec::with_capacity(burst_config.requests_per_burst as usize);
+
+                for _ in 0..burst_config.requests_per_burst {
+                    if cancel_token.is_cancelled() {
+                        break;
+                    }
+
+                    let client = client.clone();
+                    let url = url.clone();
+                    let method = method.clone();
+                    let headers = headers.clone();
+                    let body = body.clone();
+                    let result_tx = result_tx.clone();
+                    let form_fields = form_fields.clone();
+                    let basic_auth = basic_auth.clone();
+
+                    let handle = tokio::spawn(async move {
+                        let form_data = if !form_fields.is_empty() {
+                            Some(form_fields.as_slice())
+                        } else {
+                            None
+                        };
+                        let basic_auth_ref = basic_auth
+                            .as_ref()
+                            .map(|(u, p)| (u.as_str(), p.as_deref()));
+
+                        let result = crate::http::execute_request(
+                            &client,
+                            &url,
+                            &method,
+                            &headers,
+                            body.as_deref(),
+                            form_data,
+                            basic_auth_ref,
+                            false, // capture_body
+                            None,  // scheduled_at
+                        )
+                        .await;
+
+                        let _ = result_tx.send(result).await;
+                    });
+                    handles.push(handle);
+                }
+
+                // Wait for all requests in this burst to complete
+                for handle in handles {
+                    let _ = handle.await;
+                }
+
+                // Check if we should continue
+                if start.elapsed() >= total_duration || cancel_token.is_cancelled() {
+                    break;
+                }
+
+                // Wait before next burst
+                tokio::select! {
+                    _ = sleep(burst_config.delay_between_bursts) => {}
+                    _ = cancel_token.cancelled() => break,
+                }
+            }
+
+            tracing::info!("Burst mode completed: {} bursts sent", burst_count);
+        });
+
+        // Wait for duration or cancellation
+        let cancel_token = self.cancel_token.clone();
+        tokio::select! {
+            _ = sleep(total_duration) => {
+                tracing::info!("Duration elapsed, stopping burst mode");
+                cancel_token.cancel();
+            }
+            _ = cancel_token.cancelled() => {
+                tracing::info!("Cancellation requested");
+            }
+            _ = burst_handle => {
+                tracing::info!("Burst executor finished");
+            }
         }
 
         let stats = aggregator_handle
@@ -657,6 +860,7 @@ impl Engine {
             self.phase_tx.clone(),
             self.config.max_requests,
             self.cancel_token.clone(),
+            self.config.db_url.clone(),
         );
         let aggregator_handle = tokio::spawn(aggregator.run());
 
@@ -802,6 +1006,7 @@ impl Engine {
             self.phase_tx.clone(),
             self.config.max_requests,
             self.cancel_token.clone(),
+            self.config.db_url.clone(),
         );
         let aggregator_handle = tokio::spawn(aggregator.run());
 

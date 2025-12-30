@@ -873,3 +873,152 @@ mod protocol_conflict {
             ));
     }
 }
+
+mod v1_3_config {
+    use super::*;
+
+    #[test]
+    fn rand_regex_url_config_validates() {
+        let dir = tempdir().unwrap();
+        let config = dir.path().join("config.toml");
+
+        fs::write(
+            &config,
+            r#"
+[target]
+rand_regex_url = "https://example\\.com/users/[0-9]+"
+"#,
+        )
+        .unwrap();
+
+        kaioken()
+            .args(["run", "-f", config.to_str().unwrap(), "--dry-run", "-y"])
+            .assert()
+            .success()
+            .stderr(predicate::str::contains("Configuration validated"));
+    }
+
+    #[test]
+    fn urls_from_file_config_validates() {
+        let dir = tempdir().unwrap();
+        let urls_file = dir.path().join("urls.txt");
+        fs::write(&urls_file, "https://example.com/1\nhttps://example.com/2\n").unwrap();
+
+        let config = dir.path().join("config.toml");
+        fs::write(
+            &config,
+            format!(
+                r#"
+[target]
+urls_from_file = "{}"
+"#,
+                urls_file.to_str().unwrap().replace('\\', "\\\\")
+            ),
+        )
+        .unwrap();
+
+        kaioken()
+            .args(["run", "-f", config.to_str().unwrap(), "--dry-run", "-y"])
+            .assert()
+            .success()
+            .stderr(predicate::str::contains("Configuration validated"));
+    }
+
+    #[test]
+    fn body_lines_config_validates() {
+        let dir = tempdir().unwrap();
+        let body_file = dir.path().join("bodies.jsonl");
+        fs::write(&body_file, "{\"id\":1}\n{\"id\":2}\n").unwrap();
+
+        let config = dir.path().join("config.toml");
+        fs::write(
+            &config,
+            format!(
+                r#"
+[target]
+url = "https://example.com/api"
+body_lines_file = "{}"
+"#,
+                body_file.to_str().unwrap().replace('\\', "\\\\")
+            ),
+        )
+        .unwrap();
+
+        kaioken()
+            .args(["run", "-f", config.to_str().unwrap(), "--dry-run", "-y"])
+            .assert()
+            .success()
+            .stderr(predicate::str::contains("Configuration validated"));
+    }
+
+    #[test]
+    fn connect_to_config_validates() {
+        let dir = tempdir().unwrap();
+        let config = dir.path().join("config.toml");
+
+        fs::write(
+            &config,
+            r#"
+[target]
+url = "https://example.com/api"
+connect_to = "example.com:127.0.0.1:8080"
+"#,
+        )
+        .unwrap();
+
+        kaioken()
+            .args(["run", "-f", config.to_str().unwrap(), "--dry-run", "-y"])
+            .assert()
+            .success()
+            .stderr(predicate::str::contains("Configuration validated"));
+    }
+
+    #[test]
+    fn burst_mode_config_validates() {
+        let dir = tempdir().unwrap();
+        let config = dir.path().join("config.toml");
+
+        fs::write(
+            &config,
+            r#"
+[target]
+url = "https://example.com/api"
+
+[load]
+burst_rate = 100
+burst_delay = "1s"
+"#,
+        )
+        .unwrap();
+
+        kaioken()
+            .args(["run", "-f", config.to_str().unwrap(), "--dry-run", "-y"])
+            .assert()
+            .success()
+            .stderr(predicate::str::contains("Configuration validated"));
+    }
+
+    #[test]
+    fn db_url_config_validates() {
+        let dir = tempdir().unwrap();
+        let config = dir.path().join("config.toml");
+
+        fs::write(
+            &config,
+            r#"
+[target]
+url = "https://example.com/api"
+
+[load]
+db_url = "results.db"
+"#,
+        )
+        .unwrap();
+
+        kaioken()
+            .args(["run", "-f", config.to_str().unwrap(), "--dry-run", "-y"])
+            .assert()
+            .success()
+            .stderr(predicate::str::contains("Configuration validated"));
+    }
+}

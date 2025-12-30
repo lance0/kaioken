@@ -450,3 +450,214 @@ mod import_command {
         assert!(!content.contains("cdn.example.com"));
     }
 }
+
+mod v1_3_features {
+    use super::*;
+    use std::fs;
+    use tempfile::tempdir;
+
+    #[test]
+    fn help_shows_v1_3_flags() {
+        kaioken()
+            .args(["run", "--help"])
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("--rand-regex-url"))
+            .stdout(predicate::str::contains("--urls-from-file"))
+            .stdout(predicate::str::contains("--body-lines"))
+            .stdout(predicate::str::contains("--connect-to"))
+            .stdout(predicate::str::contains("--db-url"))
+            .stdout(predicate::str::contains("--burst-rate"))
+            .stdout(predicate::str::contains("--burst-delay"));
+    }
+
+    #[test]
+    fn rand_regex_url_provides_url() {
+        // --rand-regex-url should satisfy the URL requirement
+        kaioken()
+            .args([
+                "run",
+                "--rand-regex-url",
+                "https://example\\.com/users/[0-9]+",
+                "--dry-run",
+            ])
+            .assert()
+            .success()
+            .stderr(predicate::str::contains("Configuration validated"));
+    }
+
+    #[test]
+    fn urls_from_file_provides_url() {
+        let dir = tempdir().unwrap();
+        let urls_file = dir.path().join("urls.txt");
+        fs::write(&urls_file, "https://example.com/1\nhttps://example.com/2\n").unwrap();
+
+        kaioken()
+            .args([
+                "run",
+                "--urls-from-file",
+                urls_file.to_str().unwrap(),
+                "--dry-run",
+            ])
+            .assert()
+            .success()
+            .stderr(predicate::str::contains("Configuration validated"));
+    }
+
+    #[test]
+    fn urls_from_file_empty_fails() {
+        let dir = tempdir().unwrap();
+        let urls_file = dir.path().join("empty.txt");
+        fs::write(&urls_file, "").unwrap();
+
+        kaioken()
+            .args([
+                "run",
+                "--urls-from-file",
+                urls_file.to_str().unwrap(),
+                "--dry-run",
+            ])
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("URL is required"));
+    }
+
+    #[test]
+    fn body_lines_file_validates() {
+        let dir = tempdir().unwrap();
+        let body_file = dir.path().join("bodies.jsonl");
+        fs::write(&body_file, "{\"id\":1}\n{\"id\":2}\n").unwrap();
+
+        kaioken()
+            .args([
+                "run",
+                "https://example.com",
+                "-Z",
+                body_file.to_str().unwrap(),
+                "--dry-run",
+            ])
+            .assert()
+            .success()
+            .stderr(predicate::str::contains("Configuration validated"));
+    }
+
+    #[test]
+    fn connect_to_flag_validates() {
+        kaioken()
+            .args([
+                "run",
+                "https://example.com",
+                "--connect-to",
+                "example.com:127.0.0.1:8080",
+                "--dry-run",
+            ])
+            .assert()
+            .success()
+            .stderr(predicate::str::contains("Configuration validated"));
+    }
+
+    #[test]
+    fn connect_to_invalid_format_fails() {
+        kaioken()
+            .args([
+                "run",
+                "https://example.com",
+                "--connect-to",
+                "invalid",
+                "--dry-run",
+            ])
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("Invalid connect-to format"));
+    }
+
+    #[test]
+    fn db_url_flag_accepted() {
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("test.db");
+
+        kaioken()
+            .args([
+                "run",
+                "https://example.com",
+                "--db-url",
+                db_path.to_str().unwrap(),
+                "--dry-run",
+            ])
+            .assert()
+            .success()
+            .stderr(predicate::str::contains("Configuration validated"));
+    }
+
+    #[test]
+    fn burst_mode_requires_both_flags() {
+        // --burst-rate without --burst-delay should fail
+        kaioken()
+            .args([
+                "run",
+                "https://example.com",
+                "--burst-rate",
+                "100",
+                "--dry-run",
+            ])
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("burst-delay"));
+    }
+
+    #[test]
+    fn burst_mode_validates() {
+        kaioken()
+            .args([
+                "run",
+                "https://example.com",
+                "--burst-rate",
+                "100",
+                "--burst-delay",
+                "1s",
+                "--dry-run",
+            ])
+            .assert()
+            .success()
+            .stderr(predicate::str::contains("Configuration validated"));
+    }
+
+    #[test]
+    fn burst_mode_conflicts_with_arrival_rate() {
+        kaioken()
+            .args([
+                "run",
+                "https://example.com",
+                "--burst-rate",
+                "100",
+                "--burst-delay",
+                "1s",
+                "--arrival-rate",
+                "50",
+                "--dry-run",
+            ])
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("cannot be used with"));
+    }
+
+    #[test]
+    fn rand_regex_conflicts_with_urls_from_file() {
+        let dir = tempdir().unwrap();
+        let urls_file = dir.path().join("urls.txt");
+        fs::write(&urls_file, "https://example.com/1\n").unwrap();
+
+        kaioken()
+            .args([
+                "run",
+                "--rand-regex-url",
+                "https://example\\.com/[0-9]+",
+                "--urls-from-file",
+                urls_file.to_str().unwrap(),
+                "--dry-run",
+            ])
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("cannot be used with"));
+    }
+}
