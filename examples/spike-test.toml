@@ -1,0 +1,54 @@
+# Spike Test
+# Test system resilience with traffic bursts (flash sale, viral moment)
+
+[target]
+url = "https://api.example.com/v1/products/featured"
+method = "GET"
+timeout = "30s"  # Longer timeout for spike handling
+
+[target.headers]
+Accept = "application/json"
+
+[load]
+duration = "2m"
+
+# Burst mode: 500 requests instantly, wait 5s, repeat
+burst_rate = 500
+burst_delay = "5s"
+
+# Alternative: Use stages for gradual spike
+# Comment out burst_rate/burst_delay and use this instead:
+#
+# [[stages]]
+# duration = "10s"
+# target_vus = 10      # Baseline
+#
+# [[stages]]
+# duration = "5s"
+# target_vus = 500     # SPIKE!
+#
+# [[stages]]
+# duration = "30s"
+# target_vus = 500     # Hold spike
+#
+# [[stages]]
+# duration = "10s"
+# target_vus = 10      # Recovery
+#
+# [[stages]]
+# duration = "30s"
+# target_vus = 10      # Monitor recovery
+
+# Checks during spike
+[[checks]]
+name = "survives spike"
+status_regex = "^[1-4]"  # Accept rate limiting (429) but not 5xx
+
+[[checks]]
+name = "recovers within 5s"
+max_latency = "5s"
+
+# Lenient thresholds for spike test
+[thresholds]
+p99_latency = "< 10s"    # Spike causes latency
+error_rate = "< 0.10"    # Up to 10% errors acceptable during spike

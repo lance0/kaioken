@@ -1,0 +1,81 @@
+# E-Commerce Load Test
+# Multi-scenario test simulating real user behavior with request chaining
+
+[target]
+url = "https://shop.example.com"  # Base URL (overridden by scenarios)
+cookie_jar = true                  # Sessions persist across requests
+
+[load]
+concurrency = 200
+duration = "5m"
+ramp_up = "30s"
+think_time = "500ms"  # Realistic pause between requests
+
+# Scenario 1: Browse products (60% of traffic)
+[[scenarios]]
+name = "browse"
+weight = 60
+url = "https://shop.example.com/api/products"
+method = "GET"
+tags = ["read", "catalog"]
+
+[scenarios.headers]
+Accept = "application/json"
+
+# Scenario 2: Search (25% of traffic)
+[[scenarios]]
+name = "search"
+weight = 25
+url = "https://shop.example.com/api/search?q=electronics"
+method = "GET"
+tags = ["read", "search"]
+
+[scenarios.headers]
+Accept = "application/json"
+
+# Scenario 3: Add to cart (10% of traffic)
+[[scenarios]]
+name = "add-to-cart"
+weight = 10
+url = "https://shop.example.com/api/cart"
+method = "POST"
+body = '{"product_id": "${REQUEST_ID}", "quantity": 1}'
+tags = ["write", "cart"]
+
+[scenarios.headers]
+Content-Type = "application/json"
+
+# Scenario 4: Checkout (5% of traffic) - depends on auth
+[[scenarios]]
+name = "checkout"
+weight = 5
+url = "https://shop.example.com/api/checkout"
+method = "POST"
+body = '{"payment_method": "card"}'
+tags = ["write", "checkout", "critical"]
+
+[scenarios.headers]
+Content-Type = "application/json"
+Authorization = "Bearer ${USER_TOKEN}"
+
+# Response validation
+[[checks]]
+name = "no server errors"
+status_regex = "^[1-4]"  # 1xx, 2xx, 3xx, 4xx OK; 5xx fails
+
+[[checks]]
+name = "browse responds fast"
+max_latency = "100ms"
+tags = ["catalog"]  # Only apply to catalog requests
+
+[[checks]]
+name = "checkout under 1s"
+max_latency = "1s"
+tags = ["checkout"]
+
+# Thresholds for CI/CD
+[thresholds]
+p95_latency = "< 500ms"
+p99_latency = "< 2s"
+error_rate = "< 0.005"       # < 0.5% errors
+check_pass_rate = "> 0.98"   # Strict for e-commerce

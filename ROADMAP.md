@@ -22,6 +22,7 @@ Fast local load testing against HTTP endpoints with zero setup friction, real-ti
 | **WebSocket** | ✅ | ✅ | ❌ | ❌ | ✅ |
 | **gRPC** | ✅* | ✅ | ❌ | ❌ | ✅ |
 | **Prometheus Export** | 🔜 v1.4 | ✅ | ❌ | ❌ | ✅ |
+| **Distributed Mode** | 🔜 v2.0 | ✅ (Cloud) | ❌ | ❌ | ✅ |
 | **Language** | Rust | Go | Rust | C | Scala |
 
 ### Key Differentiators
@@ -169,23 +170,59 @@ Fast local load testing against HTTP endpoints with zero setup friction, real-ti
 - [x] **HAR import** - Convert browser recordings to load tests
 - [x] **GitHub release workflow** - Cross-compiled binaries
 
+### v1.2 — Enterprise Features ✓
+
+- [x] **Proxy support** - HTTP/HTTPS/SOCKS5 proxies (`-x, --proxy`)
+- [x] **Basic authentication** - User:password auth (`-a, --basic-auth`)
+- [x] **Multipart forms** - File uploads with curl-like syntax (`-F field=value`)
+- [x] **Client certificates (mTLS)** - Mutual TLS authentication
+- [x] **Custom CA certificates** - Trust custom certificate authorities
+- [x] **Debug mode** - Single request with full request/response dump (`--debug`)
+- [x] **Think time** - Realistic pauses between requests (`--think-time`)
+
+### v1.3 — Advanced Load Generation ✓
+
+- [x] **Random URL generation** - Generate URLs from regex patterns (`--rand-regex-url`)
+  ```bash
+  kaioken run --rand-regex-url 'https://api\.example\.com/users/[a-z]{3}[0-9]{2}'
+  ```
+- [x] **URL list from file** - Round-robin URLs from file (`--urls-from-file`)
+- [x] **Body lines from file** - Round-robin payloads (`-Z, --body-lines`)
+- [x] **DNS override** - Route requests to different hosts (`--connect-to`)
+- [x] **SQLite logging** - Export snapshots to SQLite for analysis (`--db-url`)
+- [x] **Burst mode** - Spike testing with N requests, delay, repeat
+  ```bash
+  kaioken run https://api.example.com --burst-rate 100 --burst-delay 1s -d 60s
+  ```
+- [x] **5-minute tutorial** - Quick start guide in README
+- [x] **Real-world examples** - Production-ready config templates in `examples/`
+
 ### v1.4 — Observability & Integration
 
-- [ ] **Prometheus metrics endpoint** - Expose `/metrics` while test runs
-- [ ] **InfluxDB export** - Time-series metrics output
+- [ ] **Prometheus metrics export** - Push to Pushgateway or expose `/metrics` endpoint
+  - Real-time RPS, latency percentiles, error rates
+  - Grafana dashboard template included
+- [ ] **InfluxDB export** - Time-series metrics for Grafana/Chronograf
 - [ ] **OpenTelemetry traces** - Distributed tracing support
 - [ ] **Import converters** - Postman collections, OpenAPI specs
 
 ### v1.5 — Production Polish
 
-- [ ] **Comprehensive test suite** - Unit, integration, e2e tests
-- [ ] **Documentation site** - Dedicated docs with examples and tutorials
-- [ ] **Plugin system** - Custom checks, extractors, output formats
+- [ ] **Documentation site** - Dedicated docs with searchable examples
+- [ ] **VS Code extension** - TOML schema validation, syntax highlighting, run button
 - [ ] **Statistical significance** - Multi-run baseline comparison with confidence intervals
+- [ ] **Plugin system** - Custom checks, extractors, output formats
 
 ---
 
 ## Future Considerations (v2.x+)
+
+**Distributed Mode (v2.0):**
+- Coordinated multi-node load generation
+- Controller + worker architecture
+- Aggregated metrics from all nodes
+- Zero-config worker discovery (mDNS/DNS-SD)
+- Cloud-ready (Kubernetes, Docker Swarm)
 
 **Protocol Support:**
 - GraphQL — Query-aware load testing with introspection
@@ -194,11 +231,9 @@ Fast local load testing against HTTP endpoints with zero setup friction, real-ti
 - TCP/UDP — Raw socket testing
 
 **Advanced Features:**
-- Distributed mode — Coordinated multi-node load generation
 - Lua/Rhai scripting — Dynamic request generation
-- File uploads — multipart/form-data support
-- Proxy support — HTTP/SOCKS proxy
 - Custom metrics — User-defined counters/gauges
+- Response caching — Simulate CDN behavior
 
 **Metrics & Analysis:**
 - Keep-alive metrics — Connection reuse tracking
@@ -208,9 +243,9 @@ Fast local load testing against HTTP endpoints with zero setup friction, real-ti
 - Connection pool metrics — Track reuse, idle, and failed connections
 
 **Developer Experience:**
-- VS Code extension — Syntax highlighting for kaioken configs
 - Browser extension — Record traffic as kaioken scenarios
 - Interactive mode — REPL for exploring responses
+- Language server — LSP for config file intelligence
 
 ---
 

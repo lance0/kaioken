@@ -1,0 +1,57 @@
+# Capacity Test
+# Find system limits using constant arrival rate with ramping stages
+
+[target]
+url = "https://api.example.com/v1/health"
+method = "GET"
+timeout = "10s"
+
+[target.headers]
+Accept = "application/json"
+
+[load]
+duration = "10m"
+max_vus = 1000  # Safety cap on concurrent VUs
+
+# Ramp arrival rate to find breaking point
+[[stages]]
+duration = "1m"
+target_rate = 100   # Start at 100 RPS
+
+[[stages]]
+duration = "2m"
+target_rate = 500   # Increase to 500 RPS
+
+[[stages]]
+duration = "2m"
+target_rate = 1000  # Push to 1000 RPS
+
+[[stages]]
+duration = "2m"
+target_rate = 2000  # Double it
+
+[[stages]]
+duration = "2m"
+target_rate = 500   # Back off to observe recovery
+
+[[stages]]
+duration = "1m"
+target_rate = 100   # Return to baseline
+
+# SQLite logging for post-analysis
+db_url = "capacity-results.db"
+
+# Checks
+[[checks]]
+name = "healthy response"
+status = 200
+
+[[checks]]
+name = "acceptable latency"
+max_latency = "1s"
+
+# Monitor these metrics to find capacity limit
+[thresholds]
+p95_latency = "< 500ms"   # When this breaks, you've hit capacity
+p99_latency = "< 2s"
+error_rate = "< 0.05"     # 5% error rate = capacity limit

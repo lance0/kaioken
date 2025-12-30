@@ -137,6 +137,117 @@ kaioken compare baseline.json current.json
 kaioken completions bash >> ~/.bashrc
 ```
 
+## 5-Minute Tutorial
+
+This tutorial walks you through testing an API endpoint, from basic test to CI/CD integration.
+
+### Step 1: Run Your First Test
+
+```bash
+# Test an endpoint with 50 concurrent users for 10 seconds
+kaioken run https://httpbin.org/get
+```
+
+You'll see a real-time TUI showing requests/sec, latency percentiles, and status codes. Press `q` to quit early or wait for completion.
+
+### Step 2: Create a Config File
+
+For repeatable tests, create a config file:
+
+```bash
+kaioken init --url https://api.example.com/users -o api-test.toml
+```
+
+Edit `api-test.toml` to customize:
+
+```toml
+[target]
+url = "https://api.example.com/users"
+method = "GET"
+
+[target.headers]
+Authorization = "Bearer ${API_TOKEN}"  # Uses environment variable
+
+[load]
+concurrency = 100
+duration = "30s"
+ramp_up = "5s"     # Gradually add workers
+warmup = "3s"      # Exclude from metrics
+```
+
+Run with: `kaioken run -f api-test.toml`
+
+### Step 3: Add Response Validation
+
+Ensure your API returns correct responses:
+
+```toml
+[[checks]]
+name = "status is 200"
+status = 200
+
+[[checks]]
+name = "response has users"
+body_contains = "users"
+
+[[checks]]
+name = "response time OK"
+max_latency = "500ms"
+```
+
+The TUI shows check pass rates in real-time.
+
+### Step 4: Set CI/CD Thresholds
+
+Fail the test if performance degrades:
+
+```toml
+[thresholds]
+p95_latency = "< 500ms"     # 95th percentile under 500ms
+p99_latency = "< 1s"        # 99th percentile under 1s
+error_rate = "< 0.01"       # Less than 1% errors
+check_pass_rate = "> 0.95"  # 95% of checks pass
+rps = "> 100"               # At least 100 req/s
+```
+
+Exit code is non-zero if thresholds are breached.
+
+### Step 5: Compare Results for Regressions
+
+Save results and compare against baselines:
+
+```bash
+# Save baseline
+kaioken run -f api-test.toml -o baseline.json
+
+# After code changes, compare
+kaioken run -f api-test.toml -o current.json
+kaioken compare baseline.json current.json
+```
+
+`compare` exits with code 3 if regressions detected—perfect for CI gates.
+
+### Step 6: Run in CI/CD
+
+```yaml
+# .github/workflows/load-test.yml
+- name: Load test
+  run: |
+    kaioken run -f api-test.toml -o results.json --no-tui
+    kaioken compare baseline.json results.json
+  env:
+    API_TOKEN: ${{ secrets.API_TOKEN }}
+```
+
+### What's Next?
+
+- **Arrival rate mode**: Fixed RPS with `--arrival-rate 100`
+- **Stages**: Ramp up/down with `[[stages]]`
+- **Request chaining**: Extract tokens with `[extraction]`
+- **Weighted scenarios**: Multi-endpoint with `[[scenarios]]`
+
+See the [examples/](examples/) folder for complete configurations.
+
 ## TUI Preview
 
 ![kaioken TUI](kaioken.png)

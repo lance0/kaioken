@@ -1,0 +1,45 @@
+# REST API Load Test
+# A typical authenticated API endpoint with checks and thresholds
+
+[target]
+url = "https://api.example.com/v1/users"
+method = "GET"
+timeout = "10s"
+cookie_jar = true  # Maintain session across requests
+
+[target.headers]
+Authorization = "Bearer ${API_TOKEN}"
+Accept = "application/json"
+X-Request-ID = "${REQUEST_ID}"  # Unique ID per request for tracing
+
+[load]
+concurrency = 100
+duration = "2m"
+ramp_up = "10s"    # Gradually add workers over 10s
+warmup = "5s"      # First 5s excluded from metrics
+rate = 500         # Cap at 500 RPS
+
+# Response validation
+[[checks]]
+name = "status is 200"
+status = 200
+
+[[checks]]
+name = "response is JSON"
+header_contains = { "Content-Type" = "application/json" }
+
+[[checks]]
+name = "has user data"
+body_contains = "\"id\":"
+
+[[checks]]
+name = "under 200ms"
+max_latency = "200ms"
+
+# CI/CD thresholds - fail if breached
+[thresholds]
+p95_latency = "< 300ms"
+p99_latency = "< 500ms"
+error_rate = "< 0.01"        # < 1% errors
+check_pass_rate = "> 0.95"   # > 95% checks pass
+rps = "> 200"                # At least 200 RPS sustained

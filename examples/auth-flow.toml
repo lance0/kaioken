@@ -1,0 +1,83 @@
+# Authentication Flow Test
+# Login, extract token, make authenticated requests
+
+[target]
+url = "https://api.example.com/v1/auth/login"
+method = "POST"
+body = '{"email": "test@example.com", "password": "${TEST_PASSWORD}"}'
+cookie_jar = true
+
+[target.headers]
+Content-Type = "application/json"
+
+[load]
+concurrency = 50
+duration = "2m"
+think_time = "1s"  # Realistic user behavior
+
+# Extract JWT token from login response
+[extraction]
+auth_token = "$.access_token"      # JSONPath: {"access_token": "xxx"}
+user_id = "$.user.id"              # Nested: {"user": {"id": 123}}
+session_id = "header:X-Session-ID" # From response header
+
+# Use extracted values in subsequent requests (scenarios)
+[[scenarios]]
+name = "login"
+weight = 10
+url = "https://api.example.com/v1/auth/login"
+method = "POST"
+body = '{"email": "test@example.com", "password": "${TEST_PASSWORD}"}'
+tags = ["auth"]
+
+[scenarios.headers]
+Content-Type = "application/json"
+
+[[scenarios]]
+name = "get-profile"
+weight = 45
+url = "https://api.example.com/v1/users/${user_id}"
+method = "GET"
+tags = ["read"]
+
+[scenarios.headers]
+Authorization = "Bearer ${auth_token}"
+
+[[scenarios]]
+name = "update-profile"
+weight = 30
+url = "https://api.example.com/v1/users/${user_id}"
+method = "PATCH"
+body = '{"last_active": "${TIMESTAMP_MS}"}'
+tags = ["write"]
+
+[scenarios.headers]
+Authorization = "Bearer ${auth_token}"
+Content-Type = "application/json"
+
+[[scenarios]]
+name = "logout"
+weight = 15
+url = "https://api.example.com/v1/auth/logout"
+method = "POST"
+tags = ["auth"]
+
+[scenarios.headers]
+Authorization = "Bearer ${auth_token}"
+
+# Checks
+[[checks]]
+name = "auth succeeds"
+status = 200
+tags = ["auth"]
+
+[[checks]]
+name = "profile loads"
+body_contains = "email"
+tags = ["read"]
+
+# Thresholds
+[thresholds]
+p95_latency = "< 300ms"
+error_rate = "< 0.01"
+check_pass_rate = "> 0.98"
